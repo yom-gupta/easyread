@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated, Dimensions } from 'react-native';
+import { Modal, StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated, Dimensions, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { useReading, Book } from '../context/ReadingContext';
@@ -96,6 +96,10 @@ export const QuickSwitchBookModal: React.FC<QuickSwitchBookModalProps> = ({ visi
                     onPress={() => handleSelectBook(book.bookId)}
                     activeOpacity={0.7}
                   >
+                    <Image
+                      source={{ uri: book.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=200' }}
+                      style={styles.bookCover}
+                    />
                     <View style={styles.bookInfo}>
                       <Text style={[styles.bookTitle, isSelected && styles.bookTitleSelected]}>
                         {book.title}
@@ -126,6 +130,7 @@ export const QuickSwitchBookModal: React.FC<QuickSwitchBookModalProps> = ({ visi
     </Modal>
   );
 };
+
 
 const styles = StyleSheet.create({
   overlay: {
@@ -199,6 +204,13 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  bookCover: {
+    width: 44,
+    height: 60,
+    borderRadius: 6,
+    marginRight: SPACING.md,
+    backgroundColor: COLORS.border,
   },
   bookItemSelected: {
     borderColor: COLORS.accent,

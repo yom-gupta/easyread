@@ -1,22 +1,36 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { useReading } from '../context/ReadingContext';
+import { getLevelFromXP, getLevelProgress, getXPToNextLevel, LEVEL_TABLE } from '../utils/xpHelpers';
+import {
+  GLOBAL_ACHIEVEMENTS,
+  PER_BOOK_TEMPLATES,
+  getAchievementById,
+} from '../utils/achievementHelpers';
+import { AchievementUnlockModal } from '../components/AchievementUnlockModal';
+
+const { width } = Dimensions.get('window');
+
+const FREEZE_TOKEN_MAX = 2;
 
 export const ProfileScreen: React.FC = () => {
-  const { user, books, logs, updateGoal } = useReading();
+  const { user, books, logs, updateGoal, pendingAchievements, dismissPendingAchievement } = useReading();
 
-  const totalPagesRead = logs.reduce((sum, l) => sum + l.pagesReadDelta, 0);
-  const completedBooks = books.filter(b => b.status === 'completed').length;
+  const totalPagesRead = user.totalPagesRead || logs.reduce((sum, l) => sum + l.pagesReadDelta, 0);
+  const completedBooks = user.totalBooksFinished || books.filter(b => b.status === 'completed').length;
   const daysLogged = new Set(logs.map(l => l.dateString)).size;
+
   const initials = user.displayName
     .split(' ')
     .map(w => w[0])
@@ -24,49 +38,136 @@ export const ProfileScreen: React.FC = () => {
     .toUpperCase()
     .slice(0, 2);
 
+  const levelInfo = getLevelFromXP(user.totalXP);
+  const levelProgress = getLevelProgress(user.totalXP);
+  const xpToNext = getXPToNextLevel(user.totalXP);
+  const isMaxLevel = levelInfo.level === 10;
+
+  // XP progress bar animation
+  const xpBarWidth = useRef(new Animated.Value(0)).current;
+  const [hasAnimated, setHasAnimated] = useState(false);
+
+  const onXPBarLayout = () => {
+    if (!hasAnimated) {
+      setHasAnimated(true);
+      Animated.timing(xpBarWidth, {
+        toValue: levelProgress,
+        duration: 1000,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
+  // Stats
   const stats = [
-    { label: 'Streak', value: `${user.currentStreak}d`, icon: 'flame', color: '#F97316' },
-    { label: 'Freezes', value: user.streakFreezeAvailable, icon: 'snow', color: '#3B82F6' },
-    { label: 'Completed', value: completedBooks, icon: 'checkmark-done-circle', color: COLORS.accent },
-    { label: 'Total Pages', value: totalPagesRead, icon: 'book', color: '#8B5CF6' },
-    { label: 'Days Read', value: daysLogged, icon: 'calendar', color: '#EC4899' },
-    { label: 'Target', value: `${user.currentGoal}p`, icon: 'flag', color: COLORS.gold },
+    { label: 'Streak', value: `${user.currentStreak}d`, icon: 'flame' as const, color: '#F97316' },
+    { label: 'Best Streak', value: `${user.longestStreak}d`, icon: 'trophy' as const, color: '#EAB308' },
+    { label: 'Books Done', value: completedBooks, icon: 'checkmark-done-circle' as const, color: COLORS.accent },
+    { label: 'Total Pages', value: totalPagesRead, icon: 'book' as const, color: '#8B5CF6' },
+    { label: 'Days Read', value: daysLogged, icon: 'calendar' as const, color: '#EC4899' },
+    { label: 'Daily Goal', value: `${user.currentGoal}p`, icon: 'flag' as const, color: COLORS.gold },
   ];
+
+  // Achievements display
+  const allGlobal = GLOBAL_ACHIEVEMENTS;
+  const earned = user.achievements;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.header}>
         <Ionicons name="person" size={20} color={COLORS.accent} />
-        <Text style={styles.headerTitle}>Profile Settings</Text>
+        <Text style={styles.headerTitle}>My Profile</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Compact Profile Header */}
-        <View style={styles.profileRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitials}>{initials}</Text>
-          </View>
-          <View style={styles.profileDetails}>
-            <Text style={styles.displayName}>{user.displayName}</Text>
-            <View style={styles.badgesRow}>
-              <View style={styles.streakBadge}>
-                <Ionicons name="flame" size={12} color="#F97316" />
-                <Text style={styles.streakBadgeText}>{user.currentStreak} Day Streak</Text>
-              </View>
-              <View style={styles.activeBadge}>
-                <Text style={styles.activeBadgeText}>Reader</Text>
-              </View>
+
+        {/* ── Hero Profile Card ── */}
+        <View style={styles.heroCard}>
+          {/* Avatar */}
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatar, { borderColor: levelInfo.color }]}>
+              <Text style={styles.avatarInitials}>{initials}</Text>
             </View>
+            {/* Level badge overlapping avatar */}
+            <View style={[styles.levelBadgeFloat, { backgroundColor: levelInfo.color }]}>
+              <Text style={styles.levelBadgeText}>{levelInfo.level}</Text>
+            </View>
+          </View>
+
+          {/* Name + level info */}
+          <Text style={styles.displayName}>{user.displayName}</Text>
+          <View style={styles.levelRow}>
+            <Text style={styles.levelEmoji}>{levelInfo.emoji}</Text>
+            <View>
+              <Text style={[styles.levelName, { color: levelInfo.color }]}>
+                {levelInfo.name}
+              </Text>
+              <Text style={styles.levelHindi}>{levelInfo.hindiName}</Text>
+            </View>
+          </View>
+
+          {/* XP Progress Bar */}
+          <View style={styles.xpSection} onLayout={onXPBarLayout}>
+            <View style={styles.xpLabels}>
+              <Text style={styles.xpLabelLeft}>{user.totalXP} XP</Text>
+              {isMaxLevel ? (
+                <Text style={styles.xpLabelRight}>MAX LEVEL 👑</Text>
+              ) : (
+                <Text style={styles.xpLabelRight}>{xpToNext} XP to next level</Text>
+              )}
+            </View>
+            <View style={styles.xpBarBg}>
+              <Animated.View
+                style={[
+                  styles.xpBarFill,
+                  {
+                    backgroundColor: levelInfo.color,
+                    width: xpBarWidth.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '100%'],
+                    }),
+                  },
+                ]}
+              />
+            </View>
+          </View>
+
+          {/* Streak Freeze Tokens */}
+          <View style={styles.freezeRow}>
+            <Ionicons name="snow" size={13} color="#60A5FA" />
+            <Text style={styles.freezeLabel}>Streak Freeze:</Text>
+            <View style={styles.freezeTokens}>
+              {Array.from({ length: FREEZE_TOKEN_MAX }).map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.freezeToken,
+                    i < user.streakFreezeAvailable
+                      ? styles.freezeTokenActive
+                      : styles.freezeTokenInactive,
+                  ]}
+                >
+                  <Ionicons
+                    name="snow"
+                    size={10}
+                    color={i < user.streakFreezeAvailable ? '#60A5FA' : '#CBD5E1'}
+                  />
+                </View>
+              ))}
+            </View>
+            <Text style={styles.freezeCount}>
+              {user.streakFreezeAvailable}/{FREEZE_TOKEN_MAX}
+            </Text>
           </View>
         </View>
 
-        {/* Compact Stats Grid (3 columns) */}
+        {/* ── Stats Grid ── */}
         <Text style={styles.sectionLabel}>Reading Summary</Text>
         <View style={styles.statsGrid}>
           {stats.map((stat, i) => (
             <View key={i} style={styles.statCell}>
-              <View style={[styles.statIconContainer, { backgroundColor: stat.color + '12' }]}>
-                <Ionicons name={stat.icon as any} size={16} color={stat.color} />
+              <View style={[styles.statIconContainer, { backgroundColor: stat.color + '15' }]}>
+                <Ionicons name={stat.icon} size={16} color={stat.color} />
               </View>
               <Text style={styles.statValue}>{stat.value}</Text>
               <Text style={styles.statLabel}>{stat.label}</Text>
@@ -74,27 +175,25 @@ export const ProfileScreen: React.FC = () => {
           ))}
         </View>
 
-        {/* Compact Goal Settings Card */}
-        <Text style={styles.sectionLabel}>Daily Target Goal</Text>
+        {/* ── Daily Goal Card ── */}
+        <Text style={styles.sectionLabel}>Daily Target</Text>
         <View style={styles.goalCard}>
           <View style={styles.goalHeader}>
             <View>
               <Text style={styles.goalTitle}>Daily Reading Target</Text>
-              <Text style={styles.goalSub}>Keep your baseline habits in check</Text>
+              <Text style={styles.goalSub}>Smart Goal Engine keeps this balanced</Text>
             </View>
             <View style={styles.goalControlRow}>
-              <TouchableOpacity 
-                style={styles.goalBtn} 
+              <TouchableOpacity
+                style={styles.goalBtn}
                 onPress={() => updateGoal(Math.max(1, user.baselineGoal - 5))}
                 activeOpacity={0.7}
               >
                 <Ionicons name="remove" size={16} color={COLORS.accent} />
               </TouchableOpacity>
-              
               <Text style={styles.goalValue}>{user.baselineGoal} pgs</Text>
-              
-              <TouchableOpacity 
-                style={styles.goalBtn} 
+              <TouchableOpacity
+                style={styles.goalBtn}
                 onPress={() => updateGoal(user.baselineGoal + 5)}
                 activeOpacity={0.7}
               >
@@ -102,9 +201,105 @@ export const ProfileScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
+          {user.currentGoal !== user.baselineGoal && (
+            <View style={styles.goalAdjustedBanner}>
+              <Ionicons name="trending-down" size={12} color="#F97316" />
+              <Text style={styles.goalAdjustedText}>
+                Smart Engine adjusted to {user.currentGoal} pgs/day to match your pace
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* Motivational Card */}
+        {/* ── Level Progress Map ── */}
+        <Text style={styles.sectionLabel}>Level Journey</Text>
+        <View style={styles.levelMapCard}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.levelMapRow}>
+              {LEVEL_TABLE.map((lvl, i) => {
+                const isEarned = user.level >= lvl.level;
+                const isCurrent = user.level === lvl.level;
+                return (
+                  <View key={lvl.level} style={styles.levelMapItem}>
+                    <View
+                      style={[
+                        styles.levelMapCircle,
+                        isEarned && { backgroundColor: lvl.color, borderColor: lvl.color },
+                        isCurrent && styles.levelMapCircleCurrent,
+                      ]}
+                    >
+                      <Text style={styles.levelMapEmoji}>{lvl.emoji}</Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.levelMapName,
+                        isEarned && { color: lvl.color, fontWeight: '700' },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {lvl.level}
+                    </Text>
+                    {i < LEVEL_TABLE.length - 1 && (
+                      <View
+                        style={[
+                          styles.levelMapConnector,
+                          isEarned && { backgroundColor: lvl.color },
+                        ]}
+                      />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* ── Global Achievements Grid ── */}
+        <Text style={styles.sectionLabel}>
+          Achievements{' '}
+          <Text style={styles.sectionLabelCount}>
+            {earned.filter(id => !id.includes('__')).length}/{allGlobal.length}
+          </Text>
+        </Text>
+        <View style={styles.achievementsGrid}>
+          {allGlobal.map(ach => {
+            const isUnlocked = earned.includes(ach.id);
+            return (
+              <View
+                key={ach.id}
+                style={[
+                  styles.achCell,
+                  isUnlocked && styles.achCellUnlocked,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.achCellEmoji,
+                    !isUnlocked && styles.achCellEmojiLocked,
+                  ]}
+                >
+                  {isUnlocked ? ach.emoji : '🔒'}
+                </Text>
+                <Text
+                  style={[
+                    styles.achCellName,
+                    !isUnlocked && styles.achCellNameLocked,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {isUnlocked ? ach.name : '???'}
+                </Text>
+                {isUnlocked && (
+                  <View style={styles.achXPBadge}>
+                    <Text style={styles.achXPBadgeText}>+{ach.xpReward}</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
+
+        {/* ── Motivation Card ── */}
         <View style={styles.motivationCard}>
           <Ionicons name="sparkles" size={16} color={COLORS.gold} />
           <Text style={styles.motivationText}>
@@ -113,6 +308,14 @@ export const ProfileScreen: React.FC = () => {
           <Text style={styles.motivationAuthor}>— Dr. Seuss</Text>
         </View>
       </ScrollView>
+
+      {/* Achievement modal when triggered from profile actions */}
+      {pendingAchievements.length > 0 && (
+        <AchievementUnlockModal
+          pending={pendingAchievements}
+          onDismiss={dismissPendingAchievement}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -140,76 +343,156 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACING.md,
-    paddingBottom: 80, // buffer for nav bar
+    paddingBottom: 100,
   },
-  profileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+
+  // ── Hero Card ──
+  heroCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: SPACING.md,
+    alignItems: 'center',
     marginBottom: SPACING.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: SPACING.sm,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(74, 124, 89, 0.12)',
-    borderWidth: 1.5,
-    borderColor: COLORS.accent,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(74, 124, 89, 0.08)',
+    borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.md,
   },
   avatarInitials: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: COLORS.accent,
     fontFamily: FONTS.serif,
   },
-  profileDetails: {
-    flex: 1,
+  levelBadgeFloat: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  levelBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.white,
   },
   displayName: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: COLORS.text,
     fontFamily: FONTS.serif,
+    marginBottom: 6,
   },
-  badgesRow: {
+  levelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
   },
-  streakBadge: {
+  levelEmoji: {
+    fontSize: 28,
+  },
+  levelName: {
+    fontSize: 17,
+    fontWeight: '800',
+    fontFamily: FONTS.serif,
+  },
+  levelHindi: {
+    fontSize: 11,
+    color: COLORS.mutedText,
+    fontStyle: 'italic',
+  },
+
+  // XP Bar
+  xpSection: {
+    width: '100%',
+    marginBottom: SPACING.sm,
+  },
+  xpLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  xpLabelLeft: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  xpLabelRight: {
+    fontSize: 11,
+    color: COLORS.mutedText,
+  },
+  xpBarBg: {
+    height: 8,
+    backgroundColor: COLORS.border,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  xpBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+
+  // Freeze tokens
+  freezeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(249, 115, 22, 0.08)',
-    paddingHorizontal: 6,
-    paddingVertical: 2.5,
-    borderRadius: 6,
+    gap: 5,
+    marginTop: SPACING.xs,
   },
-  streakBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#F97316',
+  freezeLabel: {
+    fontSize: 11,
+    color: COLORS.mutedText,
+    fontWeight: '600',
   },
-  activeBadge: {
-    backgroundColor: 'rgba(74, 124, 89, 0.08)',
-    paddingHorizontal: 6,
-    paddingVertical: 2.5,
-    borderRadius: 6,
+  freezeTokens: {
+    flexDirection: 'row',
+    gap: 4,
   },
-  activeBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.accent,
+  freezeToken: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
   },
+  freezeTokenActive: {
+    backgroundColor: 'rgba(96, 165, 250, 0.1)',
+    borderColor: '#60A5FA',
+  },
+  freezeTokenInactive: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  freezeCount: {
+    fontSize: 11,
+    color: COLORS.mutedText,
+    fontWeight: '600',
+  },
+
+  // Stats
   sectionLabel: {
     fontSize: 10,
     fontWeight: '700',
@@ -217,6 +500,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: SPACING.sm,
+    marginTop: 2,
+  },
+  sectionLabelCount: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.accent,
+    textTransform: 'none',
+    letterSpacing: 0,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -256,6 +547,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 1,
   },
+
+  // Goal card
   goalCard: {
     backgroundColor: COLORS.white,
     borderRadius: 16,
@@ -275,7 +568,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   goalSub: {
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.mutedText,
     marginTop: 1,
   },
@@ -301,12 +594,140 @@ const styles = StyleSheet.create({
     minWidth: 44,
     textAlign: 'center',
   },
+  goalAdjustedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(249, 115, 22, 0.08)',
+    borderRadius: 8,
+    padding: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  goalAdjustedText: {
+    fontSize: 11,
+    color: '#F97316',
+    flex: 1,
+    fontWeight: '500',
+  },
+
+  // Level Map
+  levelMapCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    marginBottom: SPACING.md,
+    overflow: 'hidden',
+  },
+  levelMapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xs,
+  },
+  levelMapItem: {
+    alignItems: 'center',
+    position: 'relative',
+    flexDirection: 'row',
+  },
+  levelMapCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  levelMapCircleCurrent: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+    transform: [{ scale: 1.15 }],
+  },
+  levelMapEmoji: {
+    fontSize: 18,
+  },
+  levelMapName: {
+    fontSize: 9,
+    color: COLORS.mutedText,
+    textAlign: 'center',
+    marginTop: 2,
+    width: 40,
+    position: 'absolute',
+    bottom: -14,
+  },
+  levelMapConnector: {
+    width: 16,
+    height: 2,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 2,
+  },
+
+  // Achievements Grid
+  achievementsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: SPACING.md,
+  },
+  achCell: {
+    width: (width - SPACING.md * 2 - 6 * 2) / 3,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    minHeight: 72,
+    justifyContent: 'center',
+  },
+  achCellUnlocked: {
+    borderColor: COLORS.accent,
+    backgroundColor: 'rgba(74, 124, 89, 0.03)',
+  },
+  achCellEmoji: {
+    fontSize: 22,
+    marginBottom: 3,
+  },
+  achCellEmojiLocked: {
+    opacity: 0.3,
+  },
+  achCellName: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  achCellNameLocked: {
+    color: COLORS.mutedText,
+    opacity: 0.5,
+  },
+  achXPBadge: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 2,
+  },
+  achXPBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+
+  // Motivation
   motivationCard: {
     backgroundColor: COLORS.text,
     borderRadius: 16,
     padding: SPACING.md,
     alignItems: 'center',
     gap: 4,
+    marginTop: SPACING.sm,
   },
   motivationText: {
     color: COLORS.background,

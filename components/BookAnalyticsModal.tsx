@@ -16,12 +16,16 @@ interface BookAnalyticsModalProps {
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible, onClose, book }) => {
-  const { vocabNotebook, logs, readingMarkers } = useReading();
+  const { vocabNotebook, logs, readingMarkers, currentBook, setCurrentBook } = useReading();
   const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const contentFadeAnim = React.useRef(new Animated.Value(0)).current;
+  const contentTranslateY = React.useRef(new Animated.Value(20)).current;
 
   React.useEffect(() => {
     if (visible) {
+      contentFadeAnim.setValue(0);
+      contentTranslateY.setValue(20);
       Animated.parallel([
         Animated.spring(slideAnim, {
           toValue: 0,
@@ -34,7 +38,21 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
           duration: 250,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => {
+        Animated.parallel([
+          Animated.timing(contentFadeAnim, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: true,
+          }),
+          Animated.spring(contentTranslateY, {
+            toValue: 0,
+            tension: 80,
+            friction: 10,
+            useNativeDriver: true,
+          })
+        ]).start();
+      });
     } else {
       Animated.parallel([
         Animated.timing(slideAnim, {
@@ -47,11 +65,18 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
           duration: 220,
           useNativeDriver: true,
         }),
+        Animated.timing(contentFadeAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
   }, [visible]);
 
   if (!book) return null;
+
+  const isCurrent = currentBook?.bookId === book.bookId;
 
   // Compute analytics
   const bookLogs = logs.filter(l => l.bookId === book.bookId);
@@ -83,7 +108,7 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
         ]}
       >
         <View style={styles.handle} />
-        
+
         <View style={styles.modalContent}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Book Analytics</Text>
@@ -93,54 +118,79 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Book Info */}
-            <View style={styles.bookHeader}>
-              {book.coverUrl && (
-                <Image source={{ uri: book.coverUrl }} style={styles.coverImage} />
-              )}
-              <Text style={styles.bookTitle}>{book.title}</Text>
-              <Text style={styles.bookAuthor}>by {book.author}</Text>
-              {book.status === 'completed' && (
-                <View style={styles.completedPill}>
-                  <Ionicons name="checkmark-circle" size={14} color={COLORS.accent} />
-                  <Text style={styles.completedPillText}>Completed</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Progress with bookmarks */}
-            <View style={styles.progressSection}>
-              <View style={styles.progressHeader}>
-                <Text style={styles.progressTitle}>Reading Progress</Text>
-                <Text style={styles.progressPct}>{pct}%</Text>
-              </View>
-              <ReadingProgressBar
-                pagesRead={book.pagesRead}
-                totalPages={book.totalPages}
-                height={10}
-              />
-              <Text style={styles.progressMeta}>
-                {book.pagesRead} / {book.totalPages} pages
-                {markers.length > 0 ? ` · ${markers.length} bookmarks` : ''}
-              </Text>
-            </View>
-
-            {/* Badges */}
-            {badges.length > 0 && (
-              <>
-                <Text style={styles.sectionTitle}>Achievements</Text>
-                <View style={styles.badgeGrid}>
-                  {badges.map(b => (
-                    <View key={b.id} style={styles.badgeCard}>
-                      <View style={[styles.badgeIcon, { backgroundColor: b.color + '20' }]}>
-                        <Ionicons name={b.icon as any} size={18} color={b.color} />
+            <Animated.View style={{ opacity: contentFadeAnim, transform: [{ translateY: contentTranslateY }] }}>
+              {/* Unified Two Column Card */}
+              <View style={styles.unifiedCard}>
+                <View style={styles.twoColumnContainer}>
+                  {/* Left Column: Book Details */}
+                  <View style={styles.leftColumn}>
+                    {book.coverUrl && (
+                      <Image source={{ uri: book.coverUrl }} style={styles.coverImage} />
+                    )}
+                    <Text style={styles.bookTitle} numberOfLines={2}>{book.title}</Text>
+                    <Text style={styles.bookAuthor}>by {book.author}</Text>
+                    
+                    {book.status === 'completed' ? (
+                      <View style={styles.completedPill}>
+                        <Ionicons name="checkmark-circle" size={12} color={COLORS.accent} />
+                        <Text style={styles.completedPillText}>Completed</Text>
                       </View>
-                      <Text style={styles.badgeLabel}>{b.label}</Text>
+                    ) : (
+                      <View style={[styles.completedPill, { backgroundColor: 'rgba(37, 99, 235, 0.1)' }]}>
+                        <Ionicons name="book-outline" size={12} color="#2563EB" />
+                        <Text style={[styles.completedPillText, { color: '#2563EB' }]}>Reading</Text>
+                      </View>
+                    )}
+
+                    {!isCurrent && book.status === 'reading' && (
+                      <TouchableOpacity
+                        style={styles.switchActiveBtn}
+                        onPress={() => {
+                          setCurrentBook(book.bookId);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="swap-horizontal" size={12} color={COLORS.white} />
+                        <Text style={styles.switchActiveBtnText}>Set Active</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Right Column: Progress & Achievements */}
+                  <View style={styles.rightColumn}>
+                    <View style={styles.progressSection}>
+                      <View style={styles.progressHeader}>
+                        <Text style={styles.progressTitle}>Progress</Text>
+                        <Text style={styles.progressPct}>{pct}%</Text>
+                      </View>
+                      <ReadingProgressBar
+                        pagesRead={book.pagesRead}
+                        totalPages={book.totalPages}
+                        height={8}
+                      />
+                      <Text style={styles.progressMeta}>
+                        {book.pagesRead}/{book.totalPages} p
+                        {markers.length > 0 ? ` · ${markers.length} bmark` : ''}
+                      </Text>
                     </View>
-                  ))}
+
+                    {badges.length > 0 && (
+                      <View style={styles.badgeSection}>
+                        <Text style={styles.badgeSectionTitle}>Badges</Text>
+                        <View style={styles.badgeGrid}>
+                          {badges.map(b => (
+                            <View key={b.id} style={[styles.badgeCard, { borderColor: b.color + '40' }]}>
+                              <Ionicons name={b.icon as any} size={10} color={b.color} style={{ marginRight: 2 }} />
+                              <Text style={[styles.badgeLabel, { color: b.color }]} numberOfLines={1}>{b.label}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </>
-            )}
+              </View>
+            </Animated.View>
 
             {/* Heatmap */}
             <View style={styles.heatmapSection}>
@@ -247,42 +297,83 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: SPACING.lg,
   },
-  bookHeader: {
+  unifiedCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
     marginBottom: SPACING.lg,
-    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  twoColumnContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  leftColumn: {
+    width: '45%',
+    alignItems: 'flex-start',
+  },
+  rightColumn: {
+    width: '50%',
+    justifyContent: 'flex-start',
   },
   coverImage: {
     width: 80,
     height: 110,
-    borderRadius: 6,
+    borderRadius: 8,
     marginBottom: SPACING.sm,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  switchActiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: COLORS.accent,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 10,
+    width: '100%',
+  },
+  switchActiveBtnText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 11,
   },
   completedPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 4,
-    marginTop: 8,
+    marginTop: 6,
     backgroundColor: 'rgba(74,124,89,0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   completedPillText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '700',
     color: COLORS.accent,
   },
   progressSection: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
+    backgroundColor: 'rgba(74, 124, 89, 0.03)',
+    borderRadius: 12,
+    padding: SPACING.sm,
+    marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: 'rgba(74, 124, 89, 0.1)',
   },
   progressHeader: {
     flexDirection: 'row',
@@ -307,49 +398,48 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontWeight: '600',
   },
+  badgeSection: {
+    marginTop: SPACING.xs,
+  },
+  badgeSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.mutedText,
+    textTransform: 'uppercase',
+    letterSpacing: 1.0,
+    marginBottom: SPACING.xs,
+  },
   badgeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: SPACING.lg,
+    gap: 4,
   },
   badgeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     backgroundColor: COLORS.white,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  badgeIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   badgeLabel: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
-    color: COLORS.text,
   },
   heatmapSection: {
     marginBottom: SPACING.lg,
   },
   bookTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontFamily: FONTS.serif,
     fontWeight: '700',
     color: COLORS.text,
-    textAlign: 'center',
   },
   bookAuthor: {
-    fontSize: 15,
+    fontSize: 13,
     color: COLORS.mutedText,
-    marginTop: 4,
+    marginTop: 2,
   },
   statsGrid: {
     flexDirection: 'row',

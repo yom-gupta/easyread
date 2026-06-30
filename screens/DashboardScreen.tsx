@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,18 +10,21 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import LottieView from 'lottie-react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { useReading } from '../context/ReadingContext';
 import { UpdateProgressModal } from '../components/UpdateProgressModal';
 import { VocabLookupModal } from '../components/VocabLookupModal';
 import { CelebrationModal } from '../components/CelebrationModal';
-
+import { StreakCelebrationModal } from '../components/StreakCelebrationModal';
 import { AddBookModal } from '../components/AddBookModal';
 import { InlineDictionarySearch } from '../components/InlineDictionarySearch';
 import { BookAnalyticsModal } from '../components/BookAnalyticsModal';
 import { QuickSwitchBookModal } from '../components/QuickSwitchBookModal';
 import { ReadingProgressBar } from '../components/ReadingProgressBar';
 import { ReadingCompanion } from '../components/ReadingCompanion';
+import { LevelUpModal } from '../components/LevelUpModal';
+import { AchievementUnlockModal } from '../components/AchievementUnlockModal';
 import { getBookPageMarkers } from '../utils/bookHelpers';
 
 export const DashboardScreen: React.FC = () => {
@@ -34,6 +37,12 @@ export const DashboardScreen: React.FC = () => {
     getEstimatedCompletionDate,
     readingMarkers,
     vocabNotebook,
+    streakTrigger,
+    dismissStreakTrigger,
+    pendingAchievements,
+    dismissPendingAchievement,
+    levelUpInfo,
+    dismissLevelUp,
   } = useReading();
 
   const [progressModalVisible, setProgressModalVisible] = useState(false);
@@ -42,6 +51,21 @@ export const DashboardScreen: React.FC = () => {
   const [analyticsModalVisible, setAnalyticsModalVisible] = useState(false);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [switchBookModalVisible, setSwitchBookModalVisible] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  const prevPagesRead = useRef(currentBook?.pagesRead || 0);
+
+  useEffect(() => {
+    if (currentBook) {
+      if (currentBook.pagesRead > prevPagesRead.current) {
+        setShowConfetti(true);
+        // Hide after 3.5 seconds
+        const timer = setTimeout(() => setShowConfetti(false), 3500);
+        return () => clearTimeout(timer);
+      }
+      prevPagesRead.current = currentBook.pagesRead;
+    }
+  }, [currentBook?.pagesRead]);
 
   const progressPercent = currentBook
     ? Math.round((currentBook.pagesRead / currentBook.totalPages) * 100)
@@ -54,6 +78,18 @@ export const DashboardScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+
+      {showConfetti && (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
+          <LottieView
+            source={require('../assets/animations/confetti.json')}
+            autoPlay
+            loop={false}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+        </View>
+      )}
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -195,6 +231,10 @@ export const DashboardScreen: React.FC = () => {
         bookTitle={currentBook?.title || 'Your Book'}
         bookAuthor={currentBook?.author || 'Unknown Author'}
       />
+      <StreakCelebrationModal
+        trigger={streakTrigger}
+        onDismiss={dismissStreakTrigger}
+      />
       <BookAnalyticsModal
         visible={analyticsModalVisible}
         onClose={() => setAnalyticsModalVisible(false)}
@@ -204,6 +244,14 @@ export const DashboardScreen: React.FC = () => {
         visible={switchBookModalVisible}
         onClose={() => setSwitchBookModalVisible(false)}
       />
+      {/* XP & Achievement modals — shown above everything else */}
+      <LevelUpModal levelInfo={levelUpInfo} onDismiss={dismissLevelUp} />
+      {pendingAchievements.length > 0 && !levelUpInfo && (
+        <AchievementUnlockModal
+          pending={pendingAchievements}
+          onDismiss={dismissPendingAchievement}
+        />
+      )}
     </SafeAreaView>
   );
 };

@@ -1,81 +1,239 @@
-# 📚 EasyReads
+# 📚 EasyReads - Mindful Reading Companion & Habit Tracker
 
-EasyReads is a mindful reading companion and habit tracker built with **React Native** and **Expo (SDK 56)**. It is designed to help readers build consistent, stress-free reading habits through dynamic smart goals, streak protection, dictionary integrations, and milestone celebrations.
+EasyReads is a premium, mindful reading companion and habit tracker built with **React Native** and **Expo (SDK 56)**. It is designed to help readers build consistent, stress-free reading habits through dynamic smart goals, streak protection, dictionary integrations, and milestone celebrations.
 
----
-
-## ✨ Features
-
-- **📖 Active Book Tracker**: Monitor your current book, track pages read, and visualize progress with a beautifully styled custom progress bar.
-- **🎯 Smart Goal Engine**: A dynamic system that adjusts your daily reading goal. If you log below your baseline goal (default: 15 pages/day) for 3 consecutive days, the app automatically scales the goal down to keep it achievable and stress-free. Logging at or above baseline restores your default goal.
-- **❄️ Habit Streak & Streak Freeze**: Tracks your daily reading habit streak. If you miss a day, the app automatically consumes a *Streak Freeze* token (up to 2 available) to protect your streak and displays a warm notification banner.
-- **🔍 Quick Dictionary Lookup**: Real-time word search integration using the *Free Dictionary API* (with a robust offline/local fallback dictionary).
-- **🎨 Social Share Card Generator**: Transform any looked-up word and definition into a premium, gold-trimmed quote card ready to be shared with friends.
-- **🏆 Pehla Kitaab (First Book Certificate)**: An elegant, full-screen digital certificate complete with elegant corner ornaments and a mindful reading quote to celebrate completing your very first book.
-- **⚙️ Interactive Simulation Panel**: A built-in developer control panel that allows you to instantly simulate streak freezes, low-activity goals, and resets to test edge-case states.
+This project implements a complete, self-contained client-side reading engine that models user behavior, automatically adjusts goals based on reading velocity, protects daily habits using streak freeze tokens, and celebrates major milestones.
 
 ---
 
-## 🛠️ Technology Stack
+## 📖 Table of Contents
+1. [System Architecture & Data Flow](#-system-architecture--data-flow)
+2. [Core Engines: Under the Hood](#-core-engines-under-the-hood)
+3. [Key Features](#-key-features)
+4. [Project Structure](#-project-structure)
+5. [Code & File Reference](#-code--file-reference)
+6. [Data Models & TypeScript Interfaces](#-data-models--typescript-interfaces)
+7. [Getting Started & Installation](#-getting-started--installation)
+8. [Simulation & Testing Workflows](#-simulation--testing-workflows)
 
-- **Framework**: [Expo](https://expo.dev/) (SDK 56.0.x)
-- **Runtime**: React Native (0.85.x) & React (19.2.x)
-- **Layout & Safe Area**: `react-native-safe-area-context`
-- **Language**: TypeScript
-- **Icons**: `@expo/vector-icons` (Ionicons)
-- **State Management**: React Context API
+---
+
+## 🏗️ System Architecture & Data Flow
+
+EasyReads operates on a unidirectional data flow powered by the **React Context API** (`ReadingContext`). The application state resides at the root level, making it easy to simulate data changes, persist updates, and trigger modal views across the UI.
+
+```mermaid
+graph TD
+    A[User Action: Log Progress / Lookup Word] --> B[UI Components / Modals]
+    B -->|Calls Dispatchers / Context Methods| C(ReadingProvider)
+    C -->|Calculates Updates| D[State Store: Books, Logs, UserProfile, Vocab]
+    D -->|Propagates Changes| E[Smart Goal Engine / Streak Protections]
+    E -->|Updates User Profile State| D
+    D -->|Renders Reactive View| F[DashboardScreen & Sub-components]
+```
+
+### Key Architectural Pillars
+- **Single Source of Truth**: The `ReadingProvider` wraps the entire app, exposing state (`user`, `books`, `logs`, `vocabNotebook`, etc.) and mutation methods to all components.
+- **Pure Functional Helpers**: Computational logic, badge calculations, and list filtering are isolated in `utils/bookHelpers.ts` to keep the context provider clean and testable.
+- **Dynamic Theming System**: Located in `constants/theme.ts`, utilizing a warm paper cream and deep ink blue palette to mimic physical books.
+
+---
+
+## ⚙️ Core Engines: Under the Hood
+
+### 1. The Smart Goal Engine
+Traditional habit trackers penalize users for falling behind, causing "streak fatigue" or abandonment. EasyReads uses a **Smart Goal Engine** that adjusts to the reader's real-time velocity.
+
+*   **Baseline Goal**: The user's target reading quantity (default is `15` pages/day).
+*   **Trigger Condition**: If the user logs pages read below their baseline goal for **3 consecutive days**, the engine scales down the daily target.
+*   **Formula**:
+    $$\text{Adjusted Goal} = \text{Baseline} - (\text{Baseline} - \text{3-Day Average}) \times 0.2$$
+    *(Rounded to the nearest page, with a minimum fallback of 1 page).*
+*   **Restoration**: If the user logs a single day at or above their original baseline, the engine immediately restores the goal to the baseline value.
+
+### 2. Habit Streak & Streak Freeze Protection
+To prevent demotivation when a day is missed, EasyReads implements a streak protection protocol:
+*   **Streak Freeze Tokens**: The user starts with a maximum of `2` tokens.
+*   **Automatic Protection**: If a reading day is skipped (simulated or actual), a token is consumed to keep the streak intact.
+*   **Notification Banner**: A light-green banner notifies the user that their streak was protected yesterday.
+*   **Streak Reset**: If no freeze tokens remain and a day is skipped, the streak resets to `0`.
+
+### 3. Rolling Page Average & Estimation Engine
+*   **Rolling Average**: Calculates the average pages read per day over active reading days in the last 5 days.
+*   **Estimated Completion Date**: Uses the active book's remaining pages divided by the user's `rollingPageAverage` to calculate the exact calendar date the user will finish the book.
+
+---
+
+## ✨ Key Features
+
+*   **📖 Active Book Tracker**: Manages multiple books in progress, page-by-page progress bars, and estimated completion dates.
+*   **🎨 Custom Reading Heatmaps**: Visualizes progress using page markers where the user logged progress or saved words.
+*   **🔍 Quick Dictionary Lookup**: Searches words in real-time using the *Free Dictionary API*, falling back to a local offline dictionary if offline.
+*   **🏆 Pehla Kitaab (First Book Certificate)**: An elegant digital certificate with gold corner ornaments and a mindful reading quote that displays immediately when the user completes their first-ever book.
+*   **🎨 Social Share Card Generator**: Generates high-fidelity shareable gold-trimmed quote cards with looked-up words, their definitions, page numbers, and parent book titles.
+*   **⚙️ Interactive Developer Panel**: An expandable controls drawer to simulate edge-case scenarios like skipping a day, logging 3 low entries, or resetting state.
+
 ---
 
 ## 📂 Project Structure
 
 ```text
 easyread/
-├── assets/                  # App icons, splash screens, and adaptive assets
-├── components/              # Reusable UI component sheets and modals
-│   ├── CelebrationModal.tsx      # Certificate of first book completion
-│   ├── SimulationControls.tsx    # Interactive developer panel
-│   ├── UpdateProgressModal.tsx   # Progress logger sheet
-│   └── VocabLookupModal.tsx      # Dictionary search & share card generator
+├── assets/                    # App icons, splash screens, and adaptive assets
+├── components/                # Reusable UI components & modals
+│   ├── CelebrationModal.tsx        # Pehla Kitaab full-screen completion certificate
+│   ├── SimulationControls.tsx      # Developer simulator drawer (skip day, low logs)
+│   ├── UpdateProgressModal.tsx     # Sliding progress logger sheet
+│   └── VocabLookupModal.tsx        # Dictionary Search, local dictionary & share cards
 ├── constants/
-│   └── theme.ts             # Global design tokens (colors, spacings, fonts)
+│   └── theme.ts               # Global design tokens (colors, spacings, fonts)
 ├── context/
-│   └── ReadingContext.tsx   # Core reading, smart goals, and simulation state provider
+│   └── ReadingContext.tsx     # State store, Smart Goal Engine, and Streak Freeze logic
+├── navigation/                # Navigation configurations
 ├── screens/
-│   └── DashboardScreen.tsx  # Main application layout and dashboard
-├── App.tsx                  # Root component wrapping state provider and UI
-├── App.json                 # Expo configuration metadata
-├── tsconfig.json            # TypeScript compiler configuration
-└── package.json             # Dependencies and build scripts
+│   └── DashboardScreen.tsx    # Main user dashboard containing all UI sub-panels
+├── utils/
+│   └── bookHelpers.ts         # Math helpers (rolling averages, badges, filter functions)
+├── App.tsx                    # Root component wrapping state provider
+├── app.json                   # Expo configuration metadata
+├── index.ts                   # Application entry point
+├── package.json               # Native modules and configuration scripts
+└── tsconfig.json              # TypeScript compilation rules
 ```
 
 ---
 
-## 🚀 Getting Started
+## 💻 Code & File Reference
 
-### 1. Installation
-Clone the repository and install dependencies:
+### 1. Core State Provider: `context/ReadingContext.tsx`
+This file is the nervous system of the application.
+*   **`ReadingProvider`**: Manages state arrays for `books`, `logs`, `vocabNotebook`, and flags for simulation.
+*   **`updateProgress(bookId, newPage)`**: Updates pages read for a book. If pages read equals total pages, it flags the book as completed and triggers the `Pehla Kitaab` celebration. It also updates daily log history, updates the rolling page speed average, and executes the Smart Goal recalculation check.
+*   **`simulateSkipDay()`**: Simulates a missed reading day. Decrements a streak freeze token if available to save the streak, otherwise resets the streak.
+*   **`simulateThreeLowEntries()`**: Artificially injects 3 low-progress log entries into history, triggering the Smart Goal Engine to scale down the current goal.
+
+### 2. Math & Visual Helpers: `utils/bookHelpers.ts`
+*   **`getBookBadges(book, logs, vocab)`**: Calculates earned achievements on a per-book basis. Badges include:
+    *   *Finished* (Book completed)
+    *   *Halfway* (Read $\ge$ 50% of the book)
+    *   *7-Day Reader* (Logged reading for $\ge$ 7 distinct days)
+    *   *Speed Reader* (Logged $\ge$ 20 pages in a single log)
+    *   *Word Collector* (Looked up & saved $\ge$ 5 words during this book)
+    *   *Marathon* (Read $\ge$ 300 pages total in the book)
+    *   *New Arrival* (Added within the last 7 days)
+*   **`filterBooks(books, filter, logs, vocab)`**: Filters the library view by category (`all`, `reading`, `completed`, `new`, `badges`).
+
+### 3. UI Component Sheets: `components/`
+*   **`UpdateProgressModal.tsx`**: Bottom sheet modal allowing users to log page numbers, protecting against out-of-bound errors and retrogressions.
+*   **`VocabLookupModal.tsx`**: Contains the dictionary search logic. Includes a custom, styled canvas-like card generator displaying a dictionary card with ornate styling that can be screenshotted or shared.
+*   **`CelebrationModal.tsx`**: Full-screen modal that shows a classical certificate styling for `PEHLA KITAAB` with custom border coordinates.
+*   **`SimulationControls.tsx`**: Renders three options for debugging context engines synchronously.
+
+---
+
+## 🗃️ Data Models & TypeScript Interfaces
+
+EasyReads is strictly typed to prevent state mutation bugs. Here are the core data models:
+
+### `Book`
+Represents a literary volume in the database.
+```typescript
+interface Book {
+  bookId: string;
+  title: string;
+  author: string;
+  totalPages: number;
+  pagesRead: number;
+  status: 'reading' | 'completed';
+  startedAt: string;
+  completedAt?: string;
+  coverUrl?: string;
+  isBookmarked?: boolean;
+}
+```
+
+### `ProgressLog`
+Represents daily progress logs (delta calculations).
+```typescript
+interface ProgressLog {
+  id: string;
+  bookId: string;
+  dateString: string; // YYYY-MM-DD
+  pagesReadDelta: number; // Pages read during this entry
+}
+```
+
+### `UserProfile`
+Tracks user statistics, goals, and streak items.
+```typescript
+interface UserProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  createdAt: string;
+  currentStreak: number;
+  streakFreezeAvailable: number; // Maximum value: 2
+  rollingPageAverage: number;    // Calculated rolling page speed
+  baselineGoal: number;          // Original standard goal
+  currentGoal: number;           // Dynamically scaled goal
+}
+```
+
+### `DefinitionResult`
+Represents vocabulary items saved in the user's notebook.
+```typescript
+interface DefinitionResult {
+  word: string;
+  phonetic?: string;
+  definition: string;
+  partOfSpeech: string;
+  audioUrl?: string;
+  bookId?: string;       // Context: book being read when discovered
+  bookTitle?: string;    // Context title
+  pageLearned?: number;  // Page location
+  dateLearned?: string;
+}
+```
+
+---
+
+## 🚀 Getting Started & Installation
+
+### Prerequisites
+Make sure you have Node.js and the Expo CLI installed.
+
+### 1. Install Dependencies
+Clone the repository, navigate to the folder, and run:
 ```bash
 npm install
 ```
 
-### 2. Run the Development Server
-Start the Metro bundler:
+### 2. Run the Metro Bundler
+Start the development server:
 ```bash
 npm start
 ```
 
-### 3. Open the App
-- Scan the printed QR code with your device using **Expo Go** (iOS Camera or Android Expo Go App).
-- Or run on an emulator:
-  - Press `a` for Android Emulator.
-  - Press `i` for iOS Simulator.
-  - Press `w` for Web (requires `react-native-web` and `react-dom` dependencies).
+### 3. Deploy to Client Device / Emulator
+*   **Expo Go**: Scan the Metro bundler QR code using your physical device's camera (iOS) or the Expo Go application (Android).
+*   **Android Simulator**: Press `a` in the terminal to launch on an active Android Virtual Device (AVD).
+*   **iOS Simulator**: Press `i` in the terminal to launch on Xcode's simulator.
 
 ---
 
-## 🧪 Simulation Controls (Testing Core Engines)
+## 🧪 Simulation & Testing Workflows
 
-Use the expandable **Interactive Simulation Panel** at the bottom of the dashboard screen to run the following scenarios:
-1. **Simulate Skipping a Day**: Tests the Streak Freeze protection system. It will consume a token, preserve your streak, and show a protection banner at the top of the dashboard.
-2. **Simulate 3 Low Entries**: Populates 3 days of low-page logs below the 15-page baseline, triggering the Smart Goal engine to scale down your goal (e.g. from 15 to 13 pages).
-3. **Reset Simulation State**: Restores all profiles, book statistics, and logs back to initial mock presets.
+Use the built-in control panel at the bottom of the dashboard screen to verify and debug the engines:
+
+1.  **Streak Protection (Skip Day)**:
+    *   Click **Simulate Skip Day**.
+    *   Observe if your streak freeze token count decrements (e.g., from `2` to `1`).
+    *   A notification banner stating *"Your streak was protected yesterday"* will appear at the top of the dashboard.
+    *   Click it again to consume the last token.
+    *   A third click will reset the current streak to `0` since no tokens are left.
+2.  **Smart Goal scaling (Log 3 Low Entries)**:
+    *   Click **Simulate 3 Low Entries**.
+    *   The app will inject three consecutive logs below the baseline (e.g., 3, 2, 4 pages).
+    *   The daily goal badge on the dashboard will dynamically drop from the baseline (e.g., `15`) to the adjusted goal (e.g., `13`).
+3.  **Reset Simulation**:
+    *   Click **Reset Simulation State** to restore all mock books, user records, and progress history back to their initial values.

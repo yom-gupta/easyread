@@ -7,11 +7,17 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "extra": {
+      "eas": {
+        "projectId": "df76a00c-4eae-4c73-8537-49b9922bb99e"
+      }
+    },
     "ios": {
       "supportsTablet": true,
       "icon": "./assets/appstore.png"
     },
     "android": {
+      "package": "com.yomgupta.easyread",
       "icon": "./assets/icon.png",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",

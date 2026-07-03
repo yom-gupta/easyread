@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>EasyRead — Build a Reading Habit That Sticks</title>
+<meta name="description" content="Track your daily reading, build streaks, learn new words, and level up. The mindful reading companion that makes every page count.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #FAF8F5;
+  --bg-warm: #F5F0E8;
+  --text: #1A2E40;
+  --text-muted: #64748B;
+  --accent: #4A7C59;
+  --accent-light: #E8F5E9;
+  --accent-dark: #3D6A4A;
+  --gold: #C5A880;
+  --gold-light: #F5EDE0;
+  --border: #E2E8F0;
+  --white: #FFFFFF;
+  --danger: #EF4444;
+  --shadow: rgba(0,0,0,0.06);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.serif { font-family: 'Playfair Display', Georgia, serif; }
+
+/* ═══════════════════════════════════════════
+   NAVIGATION
+   ═══════════════════════════════════════════ */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 16px 24px;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+nav.scrolled {
+  background: rgba(250, 248, 245, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+}
+.nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+}
+.nav-logo-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--accent);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+}
+.nav-logo-text {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 700;
+  font-size: 20px;
+}
+.nav-links {
+  display: flex;
+  gap: 32px;
+  list-style: none;
+}
+.nav-links a {
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--accent); }
+.nav-cta {
+  background: var(--accent);
+  color: white !important;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-weight: 600 !important;
+  transition: transform 0.2s, box-shadow 0.2s !important;
+}
+.nav-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(74, 124, 89, 0.3);
+}
+
+/* ═══════════════════════════════════════════
+   HERO SECTION
+   ═══════════════════════════════════════════ */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 24px 60px;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -200px;
+  right: -200px;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(74,124,89,0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: float 8s ease-in-out infinite;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: -100px;
+  left: -150px;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(197,168,128,0.1) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: float 10s ease-in-out infinite reverse;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-30px) scale(1.05); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInUpDelay1 { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeInUpDelay2 { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+@keyframes slideInLeft { from { opacity: 0; transform: translateX(-60px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideInRight { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes flame { 0%, 100% { transform: scaleY(1) rotate(0deg); } 25% { transform: scaleY(1.1) rotate(-2deg); } 75% { transform: scaleY(0.95) rotate(2deg); } }
+@keyframes counterUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes typewriter { from { width: 0; } to { width: 100%; } }
+@keyframes blink { 50% { border-color: transparent; } }
+@keyframes phoneFloat {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-12px) rotate(0deg); }
+}
+@keyframes streakGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(249, 115, 22, 0.2); }
+  50% { box-shadow: 0 0 40px rgba(249, 115, 22, 0.4); }
+}
+
+.hero-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+.hero-text { animation: fadeInUp 0.8s ease-out; }
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 24px;
+  border: 1px solid rgba(74, 124, 89, 0.15);
+}
+.hero-badge-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+.hero-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -1px;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+.hero-title-accent {
+  color: var(--accent);
+  position: relative;
+}
+.hero-title-accent::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: rgba(74, 124, 89, 0.15);
+  border-radius: 4px;
+  z-index: -1;
+}
+.hero-subtitle {
+  font-size: 18px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin-bottom: 36px;
+  max-width: 480px;
+}
+.hero-buttons {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--accent);
+  color: white;
+  padding: 16px 32px;
+  border-radius: 16px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 16px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(74, 124, 89, 0.25);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(74, 124, 89, 0.35);
+  background: var(--accent-dark);
+}
+.btn-primary svg { width: 20px; height: 20px; }
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--white);
+  color: var(--text);
+  padding: 16px 32px;
+  border-radius: 16px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 16px;
+  transition: all 0.3s;
+  border: 1.5px solid var(--border);
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+.hero-stats {
+  display: flex;
+  gap: 40px;
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+}
+.hero-stat-value {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.hero-stat-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* Phone Mockup */
+.hero-phone {
+  display: flex;
+  justify-content: center;
+  animation: scaleIn 1s ease-out 0.3s both;
+}
+.phone-mockup {
+  width: 280px;
+  height: 560px;
+  background: var(--white);
+  border-radius: 36px;
+  border: 6px solid #1a1a1a;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.15), 0 0 0 2px rgba(0,0,0,0.05);
+  overflow: hidden;
+  position: relative;
+  animation: phoneFloat 6s ease-in-out infinite;
+}
+.phone-notch {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 28px;
+  background: #1a1a1a;
+  border-radius: 0 0 16px 16px;
+  z-index: 2;
+}
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  padding: 40px 16px 16px;
+  overflow: hidden;
+}
+.phone-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.phone-greeting { font-size: 11px; color: var(--text-muted); }
+.phone-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+.phone-streak {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(249,115,22,0.1);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #F97316;
+}
+.phone-streak-icon { font-size: 12px; animation: flame 1.5s ease-in-out infinite; }
+.phone-book-card {
+  background: white;
+  border-radius: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.phone-book-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.phone-book-row { display: flex; gap: 10px; align-items: center; }
+.phone-book-cover {
+  width: 36px;
+  height: 50px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+}
+.phone-book-info { flex: 1; }
+.phone-book-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.phone-book-author { font-size: 9px; color: var(--text-muted); margin-top: 1px; }
+.phone-book-pct {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.phone-progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.phone-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  width: 64%;
+  transition: width 2s ease;
+}
+.phone-log-btn {
+  width: 100%;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 10px;
+  cursor: default;
+}
+.phone-search-bar {
+  display: flex;
+  align-items: center;
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  padding: 8px 14px;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.phone-search-bar span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.phone-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(240,240,240,0.84);
+  backdrop-filter: blur(20px);
+  padding: 8px 16px 20px;
+  display: flex;
+  justify-content: space-around;
+}
+.phone-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 16px;
+  color: rgba(0,0,0,0.42);
+}
+.phone-nav-item.active {
+  background: var(--accent);
+  color: white;
+  width: 44px;
+  height: 32px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ═══════════════════════════════════════════
+   FEATURES SECTION
+   ═══════════════════════════════════════════ */
+.section {
+  padding: 100px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 16px;
+}
+.section-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 16px;
+  letter-spacing: -0.5px;
+}
+.section-subtitle {
+  font-size: 17px;
+  color: var(--text-muted);
+  max-width: 540px;
+  line-height: 1.6;
+  margin-bottom: 56px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+.feature-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+.feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform 0.4s;
+  transform-origin: left;
+}
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.08);
+  border-color: rgba(74, 124, 89, 0.2);
+}
+.feature-card:hover::before { transform: scaleX(1); }
+.feature-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+.feature-icon.green { background: rgba(74,124,89,0.1); }
+.feature-icon.orange { background: rgba(249,115,22,0.1); }
+.feature-icon.purple { background: rgba(139,92,246,0.1); }
+.feature-icon.blue { background: rgba(59,130,246,0.1); }
+.feature-icon.gold { background: rgba(197,168,128,0.15); }
+.feature-icon.pink { background: rgba(236,72,153,0.1); }
+.feature-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.feature-desc {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════
+   HOW IT WORKS
+   ═══════════════════════════════════════════ */
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 32px;
+  counter-reset: step;
+}
+.step-card {
+  text-align: center;
+  padding: 40px 24px;
+  position: relative;
+  counter-increment: step;
+}
+.step-number {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 64px;
+  font-weight: 800;
+  color: rgba(74,124,89,0.08);
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  line-height: 1;
+}
+.step-icon {
+  width: 64px;
+  height: 64px;
+  background: var(--accent-light);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin: 0 auto 20px;
+  position: relative;
+  z-index: 1;
+}
+.step-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.step-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.steps-connector {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════
+   TESTIMONIALS / SOCIAL PROOF
+   ═══════════════════════════════════════════ */
+.social-proof {
+  background: var(--bg-warm);
+  border-radius: 24px;
+  padding: 56px 40px;
+  text-align: center;
+  margin-top: 20px;
+  border: 1px solid rgba(0,0,0,0.04);
+}
+.proof-stats {
+  display: flex;
+  justify-content: center;
+  gap: 56px;
+  flex-wrap: wrap;
+  margin-top: 40px;
+}
+.proof-stat {
+  text-align: center;
+}
+.proof-stat-number {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 42px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+}
+.proof-stat-label {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 6px;
+}
+
+/* ═══════════════════════════════════════════
+   SHOWCASE SECTION (screenshots grid)
+   ═══════════════════════════════════════════ */
+.showcase {
+  padding: 100px 24px;
+  text-align: center;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-warm) 100%);
+}
+.showcase-phones {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 56px;
+  flex-wrap: wrap;
+}
+.showcase-phone {
+  width: 220px;
+  background: white;
+  border-radius: 28px;
+  border: 4px solid #1a1a1a;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.showcase-phone:hover { transform: translateY(-8px); }
+.showcase-phone-inner {
+  padding: 32px 14px 14px;
+  background: var(--bg);
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+}
+.showcase-phone-label {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.showcase-feature-list {
+  text-align: left;
+  margin-top: auto;
+}
+.showcase-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.showcase-feature-item:last-child { border-bottom: none; }
+.showcase-feature-check {
+  width: 18px;
+  height: 18px;
+  background: var(--accent-light);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* Heatmap */
+.mini-heatmap {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  margin: 12px 0;
+}
+.heatmap-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: #F3F4F6;
+}
+.heatmap-cell.l1 { background: rgba(74,124,89,0.3); }
+.heatmap-cell.l2 { background: rgba(74,124,89,0.65); }
+.heatmap-cell.l3 { background: rgba(74,124,89,0.95); }
+
+/* Stats mini */
+.mini-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+}
+.mini-stat {
+  background: white;
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.mini-stat-value {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.mini-stat-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Level badges */
+.level-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+.level-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  border: 2px solid var(--border);
+  background: white;
+}
+.level-badge.earned { border-color: var(--accent); background: var(--accent-light); }
+
+/* ═══════════════════════════════════════════
+   DOWNLOAD CTA
+   ═══════════════════════════════════════════ */
+.cta-section {
+  padding: 100px 24px;
+  text-align: center;
+}
+.cta-card {
+  max-width: 700px;
+  margin: 0 auto;
+  background: var(--text);
+  border-radius: 28px;
+  padding: 64px 48px;
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+.cta-card::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 200px;
+  height: 200px;
+  background: rgba(74, 124, 89, 0.2);
+  border-radius: 50%;
+}
+.cta-card::after {
+  content: '';
+  position: absolute;
+  bottom: -40px;
+  left: -40px;
+  width: 150px;
+  height: 150px;
+  background: rgba(197, 168, 128, 0.15);
+  border-radius: 50%;
+}
+.cta-card > * { position: relative; z-index: 1; }
+.cta-emoji { font-size: 48px; margin-bottom: 20px; display: block; }
+.cta-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(28px, 4vw, 38px);
+  font-weight: 800;
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+.cta-desc {
+  font-size: 16px;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 36px;
+  line-height: 1.6;
+}
+.btn-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--accent);
+  color: white;
+  padding: 18px 40px;
+  border-radius: 16px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 18px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 20px rgba(74, 124, 89, 0.4);
+}
+.btn-download:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(74, 124, 89, 0.5);
+  background: var(--accent-dark);
+}
+.btn-download svg { width: 24px; height: 24px; }
+.cta-note {
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 16px;
+}
+
+/* ═══════════════════════════════════════════
+   FAQ
+   ═══════════════════════════════════════════ */
+.faq-list {
+  max-width: 680px;
+  margin: 0 auto;
+}
+.faq-item {
+  border-bottom: 1px solid var(--border);
+}
+.faq-question {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+  font-family: inherit;
+}
+.faq-question:hover { color: var(--accent); }
+.faq-icon {
+  font-size: 20px;
+  transition: transform 0.3s;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+.faq-item.open .faq-icon { transform: rotate(45deg); }
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.faq-item.open .faq-answer { max-height: 200px; }
+.faq-answer p {
+  padding: 0 0 24px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════ */
+footer {
+  padding: 48px 24px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.footer-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.footer-logo {
+  width: 32px;
+  height: 32px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+}
+.footer-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 700;
+  font-size: 18px;
+}
+.footer-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.footer-links a {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.footer-links a:hover { color: var(--accent); }
+
+/* ═══════════════════════════════════════════
+   SCROLL ANIMATIONS
+   ═══════════════════════════════════════════ */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-5 { transition-delay: 0.5s; }
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .hero-content {
+    grid-template-columns: 1fr;
+    text-align: center;
+    gap: 48px;
+  }
+  .hero-subtitle { margin-left: auto; margin-right: auto; }
+  .hero-buttons { justify-content: center; }
+  .hero-stats { justify-content: center; }
+  .nav-links { display: none; }
+  .proof-stats { gap: 32px; }
+  .cta-card { padding: 48px 32px; }
+  .showcase-phones { gap: 16px; }
+  .showcase-phone { width: 180px; }
+}
+@media (max-width: 600px) {
+  .hero { padding: 80px 20px 40px; min-height: auto; }
+  .section { padding: 60px 20px; }
+  .showcase { padding: 60px 20px; }
+  .cta-section { padding: 60px 20px; }
+  .features-grid { grid-template-columns: 1fr; }
+  .steps-grid { grid-template-columns: 1fr 1fr; }
+  .hero-stats { gap: 24px; flex-wrap: wrap; }
+  .phone-mockup { width: 240px; height: 480px; }
+  .social-proof { padding: 40px 24px; }
+  .proof-stats { gap: 24px; }
+  .proof-stat-number { font-size: 32px; }
+  .showcase-phones { flex-direction: column; align-items: center; }
+  .showcase-phone { width: 220px; }
+}
+
+/* ═══════════════════════════════════════════
+   CUSTOM SCROLLBAR
+   ═══════════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     NAVIGATION
+     ═══════════════════════════════════════════ -->
+<nav id="navbar">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <div class="nav-logo-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </div>
+      <span class="nav-logo-text">EasyRead</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#showcase">App Preview</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#download" class="nav-cta">Download APK</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════ -->
+<section class="hero" id="home">
+  <div class="hero-content">
+    <div class="hero-text">
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        Now available on Android
+      </div>
+      <h1 class="hero-title">
+        Build a<br>
+        <span class="hero-title-accent">Reading Habit</span><br>
+        That Sticks
+      </h1>
+      <p class="hero-subtitle">
+        Track your daily reading, build streaks, learn new words, and level up.
+        The mindful reading companion that makes every page count.
+      </p>
+      <div class="hero-buttons">
+        <a href="#download" class="btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download APK
+        </a>
+        <a href="#features" class="btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 16 16 12 12 8"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          Explore Features
+        </a>
+      </div>
+      <div class="hero-stats">
+        <div>
+          <div class="hero-stat-value">4.8</div>
+          <div class="hero-stat-label">App Rating</div>
+        </div>
+        <div>
+          <div class="hero-stat-value">Free</div>
+          <div class="hero-stat-label">No hidden costs</div>
+        </div>
+        <div>
+          <div class="hero-stat-value">10</div>
+          <div class="hero-stat-label">Reading Levels</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-phone">
+      <div class="phone-mockup">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="phone-header">
+            <div>
+              <div class="phone-greeting">Good reading,</div>
+              <div class="phone-name serif">Reader</div>
+            </div>
+            <div class="phone-streak">
+              <span class="phone-streak-icon">&#x1F525;</span> 12
+            </div>
+          </div>
+
+          <div class="phone-book-card">
+            <div class="phone-book-label">Currently Reading</div>
+            <div class="phone-book-row">
+              <div class="phone-book-cover">&#x1F4D6;</div>
+              <div class="phone-book-info">
+                <div class="phone-book-title serif">The Alchemist</div>
+                <div class="phone-book-author">Paulo Coelho</div>
+              </div>
+              <div class="phone-book-pct serif">64%</div>
+            </div>
+            <div class="phone-progress-bar">
+              <div class="phone-progress-fill"></div>
+            </div>
+            <button class="phone-log-btn">+ Log Today's Pages</button>
+          </div>
+
+          <div class="phone-search-bar">
+            <span>&#x1F50D;</span>
+            <span>Look up a word...</span>
+          </div>
+        </div>
+        <div class="phone-nav">
+          <div class="phone-nav-item active">&#x2302;</div>
+          <div class="phone-nav-item">&#x1F4CA;</div>
+          <div class="phone-nav-item">&#x1F4DA;</div>
+          <div class="phone-nav-item">&#x1F464;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     FEATURES
+     ═══════════════════════════════════════════ -->
+<section class="section" id="features">
+  <div class="section-label reveal">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    Features
+  </div>
+  <h2 class="section-title reveal">Everything you need to<br><span class="hero-title-accent">read more</span></h2>
+  <p class="section-subtitle reveal">Simple tools that help you build a consistent reading habit, one page at a time.</p>
+
+  <div class="features-grid">
+    <div class="feature-card reveal reveal-delay-1">
+      <div class="feature-icon green">&#x1F525;</div>
+      <h3 class="feature-title serif">Reading Streaks</h3>
+      <p class="feature-desc">Maintain your daily reading streak with smart streak-freeze tokens. Miss a day? Your streak is protected.</p>
+    </div>
+    <div class="feature-card reveal reveal-delay-2">
+      <div class="feature-icon orange">&#x1F3AF;</div>
+      <h3 class="feature-title serif">Smart Daily Goals</h3>
+      <p class="feature-desc">An adaptive engine adjusts your daily page target based on your pace. No pressure, just progress.</p>
+    </div>
+    <div class="feature-card reveal reveal-delay-3">
+      <div class="feature-icon purple">&#x1F4D6;</div>
+      <h3 class="feature-title serif">Vocabulary Notebook</h3>
+      <p class="feature-desc">Look up any word instantly, hear pronunciation, and save it to your personal word collection.</p>
+    </div>
+    <div class="feature-card reveal reveal-delay-1">
+      <div class="feature-icon blue">&#x1F4CA;</div>
+      <h3 class="feature-title serif">Reading Analytics</h3>
+      <p class="feature-desc">Visual heatmaps, progress charts, and session logs. See your reading journey at a glance.</p>
+    </div>
+    <div class="feature-card reveal reveal-delay-2">
+      <div class="feature-icon gold">&#x1F3C6;</div>
+      <h3 class="feature-title serif">Achievements & Levels</h3>
+      <p class="feature-desc">Earn XP for every page, unlock achievements, and level up from Page Turner to Book Sage.</p>
+    </div>
+    <div class="feature-card reveal reveal-delay-3">
+      <div class="feature-icon pink">&#x2601;&#xFE0F;</div>
+      <h3 class="feature-title serif">Cloud Sync</h3>
+      <p class="feature-desc">Your reading data syncs securely to the cloud. Sign in on any device and pick up where you left off.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     HOW IT WORKS
+     ═══════════════════════════════════════════ -->
+<section class="section" id="how-it-works">
+  <div class="section-label reveal">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    How It Works
+  </div>
+  <h2 class="section-title reveal">Start reading in<br><span class="hero-title-accent">3 simple steps</span></h2>
+  <p class="section-subtitle reveal">No complicated setup. Just open the app and start turning pages.</p>
+
+  <div class="steps-grid">
+    <div class="step-card reveal reveal-delay-1">
+      <div class="step-number">1</div>
+      <div class="step-icon">&#x1F4D6;</div>
+      <h3 class="step-title serif">Add Your Book</h3>
+      <p class="step-desc">Search millions of titles from Open Library or add your book manually in seconds.</p>
+    </div>
+    <div class="step-card reveal reveal-delay-2">
+      <div class="step-number">2</div>
+      <div class="step-icon">&#x1F4DD;</div>
+      <h3 class="step-title serif">Log Your Pages</h3>
+      <p class="step-desc">After each reading session, log the pages you've read. Track your daily progress effortlessly.</p>
+    </div>
+    <div class="step-card reveal reveal-delay-3">
+      <div class="step-number">3</div>
+      <div class="step-icon">&#x1F680;</div>
+      <h3 class="step-title serif">Level Up</h3>
+      <p class="step-desc">Earn XP, build streaks, unlock achievements, and watch your reading habit grow.</p>
+    </div>
+  </div>
+
+  <div class="social-proof reveal">
+    <h3 class="section-title serif">Readers love EasyRead</h3>
+    <div class="proof-stats">
+      <div class="proof-stat">
+        <div class="proof-stat-number" data-target="500">0</div>
+        <div class="proof-stat-label">Pages Read Daily</div>
+      </div>
+      <div class="proof-stat">
+        <div class="proof-stat-number" data-target="30">0</div>
+        <div class="proof-stat-label">Day Streaks Built</div>
+      </div>
+      <div class="proof-stat">
+        <div class="proof-stat-number" data-target="100">0</div>
+        <div class="proof-stat-label">Words Learned</div>
+      </div>
+      <div class="proof-stat">
+        <div class="proof-stat-number" data-target="50">0</div>
+        <div class="proof-stat-label">Books Finished</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     SHOWCASE
+     ═══════════════════════════════════════════ -->
+<section class="showcase" id="showcase">
+  <div class="section-label reveal" style="justify-content:center;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    App Preview
+  </div>
+  <h2 class="section-title reveal">Designed for readers,<br><span class="hero-title-accent">loved by everyone</span></h2>
+  <p class="section-subtitle reveal" style="margin-left:auto;margin-right:auto;">Every screen is crafted with care. Warm tones, smooth animations, and a calm reading experience.</p>
+
+  <div class="showcase-phones">
+    <!-- Screen 1: Analytics -->
+    <div class="showcase-phone reveal reveal-delay-1">
+      <div class="showcase-phone-inner">
+        <div class="showcase-phone-label serif">&#x1F4CA; Analytics</div>
+        <div class="mini-stats">
+          <div class="mini-stat">
+            <div class="mini-stat-value serif">12d</div>
+            <div class="mini-stat-label">Streak</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-value serif">847</div>
+            <div class="mini-stat-label">Pages</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-value serif">6</div>
+            <div class="mini-stat-label">Books</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-value serif">28</div>
+            <div class="mini-stat-label">Active Days</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-top:8px;">Reading Intensity</div>
+        <div class="mini-heatmap">
+          <div class="heatmap-cell"></div><div class="heatmap-cell l1"></div><div class="heatmap-cell l2"></div><div class="heatmap-cell"></div><div class="heatmap-cell l3"></div><div class="heatmap-cell l1"></div><div class="heatmap-cell"></div>
+          <div class="heatmap-cell l2"></div><div class="heatmap-cell l1"></div><div class="heatmap-cell"></div><div class="heatmap-cell l3"></div><div class="heatmap-cell l2"></div><div class="heatmap-cell"></div><div class="heatmap-cell l1"></div>
+          <div class="heatmap-cell"></div><div class="heatmap-cell l3"></div><div class="heatmap-cell l2"></div><div class="heatmap-cell l1"></div><div class="heatmap-cell"></div><div class="heatmap-cell l2"></div><div class="heatmap-cell l3"></div>
+          <div class="heatmap-cell l1"></div><div class="heatmap-cell"></div><div class="heatmap-cell l2"></div><div class="heatmap-cell"></div><div class="heatmap-cell l3"></div><div class="heatmap-cell l1"></div><div class="heatmap-cell l2"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:9px;color:var(--text-muted);">
+          <span>Less</span>
+          <div style="width:10px;height:10px;border-radius:2px;background:#F3F4F6;"></div>
+          <div style="width:10px;height:10px;border-radius:2px;background:rgba(74,124,89,0.3);"></div>
+          <div style="width:10px;height:10px;border-radius:2px;background:rgba(74,124,89,0.65);"></div>
+          <div style="width:10px;height:10px;border-radius:2px;background:rgba(74,124,89,0.95);"></div>
+          <span>More</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 2: Profile -->
+    <div class="showcase-phone reveal reveal-delay-2">
+      <div class="showcase-phone-inner">
+        <div class="showcase-phone-label serif">&#x1F464; Profile</div>
+        <div style="text-align:center;margin-bottom:12px;">
+          <div style="width:48px;height:48px;background:rgba(74,124,89,0.08);border-radius:50%;border:3px solid var(--accent);margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:20px;">&#x1F468;</div>
+          <div class="serif" style="font-size:14px;font-weight:700;">Reader</div>
+          <div style="font-size:10px;color:var(--text-muted);">&#x2728; Page Turner</div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:8px 12px;border:1px solid var(--border);margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px;">
+            <span style="font-weight:700;">240 XP</span>
+            <span style="color:var(--text-muted);">360 to next level</span>
+          </div>
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;background:var(--accent);border-radius:3px;width:40%;"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:10px;">
+          <div style="flex:1;text-align:center;background:white;border-radius:8px;padding:8px;border:1px solid var(--border);">
+            <div class="serif" style="font-size:14px;font-weight:800;color:#F97316;">12d</div>
+            <div style="font-size:8px;color:var(--text-muted);text-transform:uppercase;font-weight:600;">Streak</div>
+          </div>
+          <div style="flex:1;text-align:center;background:white;border-radius:8px;padding:8px;border:1px solid var(--border);">
+            <div class="serif" style="font-size:14px;font-weight:800;">6</div>
+            <div style="font-size:8px;color:var(--text-muted);text-transform:uppercase;font-weight:600;">Books</div>
+          </div>
+          <div style="flex:1;text-align:center;background:white;border-radius:8px;padding:8px;border:1px solid var(--border);">
+            <div class="serif" style="font-size:14px;font-weight:800;color:#8B5CF6;">847</div>
+            <div style="font-size:8px;color:var(--text-muted);text-transform:uppercase;font-weight:600;">Pages</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:white;border-radius:8px;padding:8px;border:1px solid var(--border);">
+          <span style="font-size:14px;">&#x2744;&#xFE0F;</span>
+          <span style="font-size:10px;color:var(--text-muted);">Streak Freeze</span>
+          <div style="display:flex;gap:3px;margin-left:auto;">
+            <div style="width:16px;height:16px;border-radius:50%;background:rgba(96,165,250,0.1);border:1.5px solid #60A5FA;display:flex;align-items:center;justify-content:center;font-size:8px;">&#x2744;&#xFE0F;</div>
+            <div style="width:16px;height:16px;border-radius:50%;background:rgba(96,165,250,0.1);border:1.5px solid #60A5FA;display:flex;align-items:center;justify-content:center;font-size:8px;">&#x2744;&#xFE0F;</div>
+            <div style="width:16px;height:16px;border-radius:50%;background:#F1F5F9;border:1.5px solid #E2E8F0;display:flex;align-items:center;justify-content:center;font-size:8px;">&#x2744;&#xFE0F;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 3: Library -->
+    <div class="showcase-phone reveal reveal-delay-3">
+      <div class="showcase-phone-inner">
+        <div class="showcase-phone-label serif">&#x1F4DA; Library</div>
+        <div style="display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap;">
+          <div style="background:var(--accent);color:white;padding:4px 10px;border-radius:12px;font-size:9px;font-weight:700;">All</div>
+          <div style="background:white;padding:4px 10px;border-radius:12px;font-size:9px;font-weight:600;color:var(--text-muted);border:1px solid var(--border);">Reading</div>
+          <div style="background:white;padding:4px 10px;border-radius:12px;font-size:9px;font-weight:600;color:var(--text-muted);border:1px solid var(--border);">Done</div>
+        </div>
+        <div class="showcase-feature-list">
+          <div class="showcase-feature-item">
+            <div style="width:28px;height:38px;background:linear-gradient(135deg,#4A7C59,#3D6A4A);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;flex-shrink:0;">&#x1F4D6;</div>
+            <div style="flex:1;">
+              <div style="font-size:11px;font-weight:700;color:var(--text);">The Alchemist</div>
+              <div style="font-size:9px;color:var(--text-muted);">Paulo Coelho &middot; 64%</div>
+            </div>
+            <div class="showcase-feature-check">&#x2713;</div>
+          </div>
+          <div class="showcase-feature-item">
+            <div style="width:28px;height:38px;background:linear-gradient(135deg,#2563EB,#1D4ED8);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;flex-shrink:0;">&#x1F4D5;</div>
+            <div style="flex:1;">
+              <div style="font-size:11px;font-weight:700;color:var(--text);">Atomic Habits</div>
+              <div style="font-size:9px;color:var(--text-muted);">James Clear &middot; 32%</div>
+            </div>
+          </div>
+          <div class="showcase-feature-item">
+            <div style="width:28px;height:38px;background:linear-gradient(135deg,#9333EA,#7C3AED);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;flex-shrink:0;">&#x1F4D7;</div>
+            <div style="flex:1;">
+              <div style="font-size:11px;font-weight:700;color:var(--text);">Deep Work</div>
+              <div style="font-size:9px;color:var(--text-muted);">Cal Newport &middot; 100%</div>
+            </div>
+            <div style="font-size:9px;color:var(--accent);font-weight:700;">Done &#x2713;</div>
+          </div>
+          <div class="showcase-feature-item">
+            <div style="width:28px;height:38px;background:linear-gradient(135deg,#F97316,#EA580C);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;flex-shrink:0;">&#x1F4D9;</div>
+            <div style="flex:1;">
+              <div style="font-size:11px;font-weight:700;color:var(--text);">Sapiens</div>
+              <div style="font-size:9px;color:var(--text-muted);">Yuval N. Harari &middot; 8%</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:auto;text-align:center;">
+          <div style="background:var(--accent);color:white;border-radius:10px;padding:8px;font-size:10px;font-weight:700;">+ Add New Book</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Screen 4: Achievements -->
+    <div class="showcase-phone reveal reveal-delay-4">
+      <div class="showcase-phone-inner">
+        <div class="showcase-phone-label serif">&#x1F3C6; Achievements</div>
+        <div class="level-row">
+          <div class="level-badge earned">&#x1F331;</div>
+          <div class="level-badge earned">&#x1F33F;</div>
+          <div class="level-badge earned">&#x1F33B;</div>
+          <div class="level-badge">&#x1F332;</div>
+          <div class="level-badge">&#x1F333;</div>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-bottom:10px;">3 of 10 levels unlocked</div>
+        <div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Achievements</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+          <div style="background:white;border-radius:10px;padding:8px;text-align:center;border:1px solid var(--accent);">
+            <div style="font-size:18px;">&#x1F31F;</div>
+            <div style="font-size:8px;font-weight:700;color:var(--text);">First Page</div>
+            <div style="background:#FEF3C7;border-radius:4px;padding:1px 4px;font-size:7px;font-weight:800;color:#92400E;margin-top:3px;display:inline-block;">+10 XP</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:8px;text-align:center;border:1px solid var(--accent);">
+            <div style="font-size:18px;">&#x1F525;</div>
+            <div style="font-size:8px;font-weight:700;color:var(--text);">7-Day Streak</div>
+            <div style="background:#FEF3C7;border-radius:4px;padding:1px 4px;font-size:7px;font-weight:800;color:#92400E;margin-top:3px;display:inline-block;">+25 XP</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:8px;text-align:center;border:1px solid var(--accent);">
+            <div style="font-size:18px;">&#x1F4DA;</div>
+            <div style="font-size:8px;font-weight:700;color:var(--text);">Bookworm</div>
+            <div style="background:#FEF3C7;border-radius:4px;padding:1px 4px;font-size:7px;font-weight:800;color:#92400E;margin-top:3px;display:inline-block;">+50 XP</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:8px;text-align:center;border:1px solid var(--border);opacity:0.4;">
+            <div style="font-size:18px;">&#x1F512;</div>
+            <div style="font-size:8px;font-weight:700;color:var(--text-muted);">???</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:8px;text-align:center;border:1px solid var(--border);opacity:0.4;">
+            <div style="font-size:18px;">&#x1F512;</div>
+            <div style="font-size:8px;font-weight:700;color:var(--text-muted);">???</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:8px;text-align:center;border:1px solid var(--border);opacity:0.4;">
+            <div style="font-size:18px;">&#x1F512;</div>
+            <div style="font-size:8px;font-weight:700;color:var(--text-muted);">???</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     FAQ
+     ═══════════════════════════════════════════ -->
+<section class="section" id="faq">
+  <div class="section-label reveal">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    FAQ
+  </div>
+  <h2 class="section-title reveal">Got questions?</h2>
+  <p class="section-subtitle reveal">Everything you need to know about EasyRead.</p>
+
+  <div class="faq-list">
+    <div class="faq-item reveal">
+      <button class="faq-question">
+        Is EasyRead free?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-answer">
+        <p>Yes, EasyRead is completely free. No subscriptions, no in-app purchases, no ads. Just a clean reading experience.</p>
+      </div>
+    </div>
+    <div class="faq-item reveal">
+      <button class="faq-question">
+        How does the streak freeze work?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-answer">
+        <p>You start with 2 streak freeze tokens. If you miss a day, a token is automatically used to protect your streak. Earn more tokens by maintaining even-numbered streaks and leveling up.</p>
+      </div>
+    </div>
+    <div class="faq-item reveal">
+      <button class="faq-question">
+        Does it work offline?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-answer">
+        <p>Yes! You can log pages and track reading offline. Data syncs to the cloud when you're back online. The dictionary requires an internet connection.</p>
+      </div>
+    </div>
+    <div class="faq-item reveal">
+      <button class="faq-question">
+        What file format is the APK?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-answer">
+        <p>The download is a standard Android APK file. Just enable "Install from unknown sources" in your Android settings and tap the downloaded file to install.</p>
+      </div>
+    </div>
+    <div class="faq-item reveal">
+      <button class="faq-question">
+        Can I import my reading data?
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-answer">
+        <p>Currently, EasyRead starts fresh. However, all your data syncs to Firebase, so you can access it across multiple devices by signing in with the same account.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     DOWNLOAD CTA
+     ═══════════════════════════════════════════ -->
+<section class="cta-section" id="download">
+  <div class="cta-card reveal">
+    <span class="cta-emoji">&#x1F4D6;</span>
+    <h2 class="cta-title serif">Start Your Reading Journey Today</h2>
+    <p class="cta-desc">Download EasyRead for free. Build a reading habit that lasts, one page at a time.</p>
+    <a href="https://expo.dev/accounts/yom_gupta/projects/easyread/builds/1878ed23-2ddf-447c-a1f0-0063a6242feb" class="btn-download" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download APK v2.0.0
+    </a>
+    <p class="cta-note">Requires Android 6.0+ &middot; 8.1 MB &middot; Free forever</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-logo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </div>
+      <span class="footer-name serif">EasyRead</span>
+    </div>
+    <p class="footer-text">Made with ❤️ by <a href="https://yomgupta.com" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-weight:600;">Yom Gupta</a> &middot; <a href="https://instagram.com/mr_yom_gupta" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-weight:600;">@mr_yom_gupta</a></p>
+    <div class="footer-links">
+      <a href="https://github.com/yom-gupta/easyread" target="_blank" rel="noopener">GitHub</a>
+      <a href="#features">Features</a>
+      <a href="#faq">FAQ</a>
+      <a href="#download">Download</a>
+    </div>
+    <p class="footer-text" style="margin-top: 24px; font-size: 12px; opacity: 0.6;">&copy; 2026 EasyRead. Made with &#x2764;&#xFE0F; for book lovers.</p>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════ -->
+<script>
+// Navbar scroll effect
+const navbar = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  navbar.classList.toggle('scrolled', window.scrollY > 40);
+});
+
+// Reveal on scroll
+const revealEls = document.querySelectorAll('.reveal');
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+revealEls.forEach(el => revealObserver.observe(el));
+
+// Counter animation
+const counterObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const el = entry.target;
+      const target = parseInt(el.dataset.target);
+      let current = 0;
+      const increment = target / 60;
+      const timer = setInterval(() => {
+        current += increment;
+        if (current >= target) {
+          current = target;
+          clearInterval(timer);
+        }
+        el.textContent = Math.round(current) + '+';
+      }, 25);
+      counterObserver.unobserve(el);
+    }
+  });
+}, { threshold: 0.5 });
+document.querySelectorAll('[data-target]').forEach(el => counterObserver.observe(el));
+
+// FAQ accordion
+document.querySelectorAll('.faq-question').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const item = btn.parentElement;
+    const wasOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+    if (!wasOpen) item.classList.add('open');
+  });
+});
+
+// Smooth scroll for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener('click', function(e) {
+    e.preventDefault();
+    const target = document.querySelector(this.getAttribute('href'));
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
+</script>
+</body>
+</html>

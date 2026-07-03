@@ -1,12 +1,12 @@
-# 📚 EasyReads - Mindful Reading Companion & Habit Tracker
+﻿# ðŸ“š EasyReads - Mindful Reading Companion
 
-EasyReads is a premium, mindful reading companion and habit tracker built with **React Native** and **Expo (SDK 56)**. It is designed to help readers build consistent, stress-free reading habits through dynamic smart goals, streak protection, dictionary integrations, and milestone celebrations.
+EasyReads is a premium, mindful reading companion built with **React Native** and **Expo (SDK 56)**. It combines intelligent habit tracking with real-time dictionary lookup to enhance your reading experience. The app features dynamic goal adjustment based on your reading velocity, streak protection, and milestone celebrations.
 
-This project implements a complete, self-contained client-side reading engine that models user behavior, automatically adjusts goals based on reading velocity, protects daily habits using streak freeze tokens, and celebrates major milestones.
+This project implements a complete reading engine that models user behavior, automatically adjusts goals based on reading velocity, protects daily habits using streak freeze tokens, and celebrates major milestones.
 
 ---
 
-## 📖 Table of Contents
+## ðŸ“– Table of Contents
 1. [System Architecture & Data Flow](#-system-architecture--data-flow)
 2. [Core Engines: Under the Hood](#-core-engines-under-the-hood)
 3. [Key Features](#-key-features)
@@ -19,7 +19,7 @@ This project implements a complete, self-contained client-side reading engine th
 
 ---
 
-## 🏗️ System Architecture & Data Flow
+## ðŸ—ï¸ System Architecture & Data Flow
 
 EasyReads operates on a unidirectional data flow powered by the **React Context API** (`ReadingContext`). The application state resides at the root level, making it easy to simulate data changes, persist updates, and trigger modal views across the UI.
 
@@ -40,7 +40,7 @@ graph TD
 
 ---
 
-## ⚙️ Core Engines: Under the Hood
+## âš™ï¸ Core Engines: Under the Hood
 
 ### 1. The Smart Goal Engine
 Traditional habit trackers penalize users for falling behind, causing "streak fatigue" or abandonment. EasyReads uses a **Smart Goal Engine** that adjusts to the reader's real-time velocity.
@@ -65,50 +65,54 @@ To prevent demotivation when a day is missed, EasyReads implements a streak prot
 
 ---
 
-## ✨ Key Features
+## âœ¨ Key Features
 
-*   **📖 Active Book Tracker**: Manages multiple books in progress, page-by-page progress bars, and estimated completion dates.
-*   **🎨 Custom Reading Heatmaps**: Visualizes progress using page markers where the user logged progress or saved words.
-*   **🔍 Quick Dictionary Lookup**: Searches words in real-time using the *Free Dictionary API*, falling back to a local offline dictionary if offline.
-*   **🏆 Pehla Kitaab (First Book Certificate)**: An elegant digital certificate with gold corner ornaments and a mindful reading quote that displays immediately when the user completes their first-ever book.
-*   **🎨 Social Share Card Generator**: Generates high-fidelity shareable gold-trimmed quote cards with looked-up words, their definitions, page numbers, and parent book titles.
-*   **⚙️ Interactive Developer Panel**: An expandable controls drawer to simulate edge-case scenarios like skipping a day, logging 3 low entries, or resetting state.
+*   **ðŸ“– Active Book Tracker**: Manages multiple books in progress, page-by-page progress bars, and estimated completion dates.
+*   **ðŸŽ¨ Custom Reading Heatmaps**: Visualizes progress using page markers where the user logged progress or saved words.
+*   **ðŸ” Quick Dictionary Lookup**: Searches words in real-time using the *Free Dictionary API*, falling back to a local offline dictionary if offline. Features:
+    *   **Smart AI animations**: Lottie sparkle effects for thinking/typing moments
+    *   **Google Gemini feel**: Staggered reveal (30ms cascade) for smooth UI
+    *   Lottie bookmark animation for save/unsave word actions
+    *   Swipe-to-dismiss for result cards
+*   **ðŸ† Pehla Kitaab (First Book Certificate)**: An elegant digital certificate with gold corner ornaments and a mindful reading quote that displays immediately when the user completes their first-ever book.
+*   **ðŸŽ¨ Social Share Card Generator**: Generates high-fidelity shareable gold-trimmed quote cards with looked-up words, their definitions, page numbers, and parent book titles.
+*   **âš™ï¸ Interactive Developer Panel**: An expandable controls drawer to simulate edge-case scenarios like skipping a day, logging 3 low entries, or resetting state.
 
 ---
 
-## 📂 Project Structure
+## ðŸ“‚ Project Structure
 
 ```text
 easyread/
-├── assets/                    # App icons, splash screens, and adaptive assets
-├── components/                # Reusable UI components & modals
-│   ├── CelebrationModal.tsx        # Pehla Kitaab full-screen completion certificate
-│   ├── SimulationControls.tsx      # Developer simulator drawer (skip day, low logs)
-│   ├── UpdateProgressModal.tsx     # Sliding progress logger sheet
-│   └── VocabLookupModal.tsx        # Dictionary Search, local dictionary & share cards
-├── config/
-│   └── firebase.ts            # Firebase JS SDK initialization (Expo Go compatible)
-├── services/
-│   └── firebase/              # Auth + Firestore read/write for reading data
-├── constants/
-│   └── theme.ts               # Global design tokens (colors, spacings, fonts)
-├── context/
-│   └── ReadingContext.tsx     # State store, Smart Goal Engine, and Streak Freeze logic
-├── navigation/                # Navigation configurations
-├── screens/
-│   └── DashboardScreen.tsx    # Main user dashboard containing all UI sub-panels
-├── utils/
-│   └── bookHelpers.ts         # Math helpers (rolling averages, badges, filter functions)
-├── App.tsx                    # Root component wrapping state provider
-├── app.json                   # Expo configuration metadata
-├── index.ts                   # Application entry point
-├── package.json               # Native modules and configuration scripts
-└── tsconfig.json              # TypeScript compilation rules
+â”œâ”€â”€ assets/                    # App icons, splash screens, and adaptive assets
+â”œâ”€â”€ components/                # Reusable UI components & modals
+â”‚   â”œâ”€â”€ CelebrationModal.tsx        # Pehla Kitaab full-screen completion certificate
+â”‚   â”œâ”€â”€ SimulationControls.tsx      # Developer simulator drawer (skip day, low logs)
+â”‚   â”œâ”€â”€ UpdateProgressModal.tsx     # Sliding progress logger sheet
+â”‚   â””â”€â”€ VocabLookupModal.tsx        # Dictionary Search, local dictionary & share cards
+â”œâ”€â”€ config/
+â”‚   â””â”€â”€ firebase.ts            # Firebase JS SDK initialization (Expo Go compatible)
+â”œâ”€â”€ services/
+â”‚   â””â”€â”€ firebase/              # Auth + Firestore read/write for reading data
+â”œâ”€â”€ constants/
+â”‚   â””â”€â”€ theme.ts               # Global design tokens (colors, spacings, fonts)
+â”œâ”€â”€ context/
+â”‚   â””â”€â”€ ReadingContext.tsx     # State store, Smart Goal Engine, and Streak Freeze logic
+â”œâ”€â”€ navigation/                # Navigation configurations
+â”œâ”€â”€ screens/
+â”‚   â””â”€â”€ DashboardScreen.tsx    # Main user dashboard containing all UI sub-panels
+â”œâ”€â”€ utils/
+â”‚   â””â”€â”€ bookHelpers.ts         # Math helpers (rolling averages, badges, filter functions)
+â”œâ”€â”€ App.tsx                    # Root component wrapping state provider
+â”œâ”€â”€ app.json                   # Expo configuration metadata
+â”œâ”€â”€ index.ts                   # Application entry point
+â”œâ”€â”€ package.json               # Native modules and configuration scripts
+â””â”€â”€ tsconfig.json              # TypeScript compilation rules
 ```
 
 ---
 
-## 💻 Code & File Reference
+## ðŸ’» Code & File Reference
 
 ### 1. Core State Provider: `context/ReadingContext.tsx`
 This file is the nervous system of the application.
@@ -130,13 +134,18 @@ This file is the nervous system of the application.
 
 ### 3. UI Component Sheets: `components/`
 *   **`UpdateProgressModal.tsx`**: Bottom sheet modal allowing users to log page numbers, protecting against out-of-bound errors and retrogressions.
+*   **`InlineDictionarySearch.tsx`**: Real-time dictionary search component featuring:
+    *   **AI Thinking Indicator**: Lottie `Sparkles Loop Loader ai.json` animation plays once when results appear
+    *   **Google Gemini Feel**: Staggered reveal (30ms cascade) with title â†’ definition â†’ example â†’ synonyms
+    *   **Bookmark Animation**: Lottie `save.json` animation for save/unsave word action
+    *   **Responsive UI**: Smooth search bar expansion, swipe-to-dismiss on result card
 *   **`VocabLookupModal.tsx`**: Contains the dictionary search logic. Includes a custom, styled canvas-like card generator displaying a dictionary card with ornate styling that can be screenshotted or shared.
 *   **`CelebrationModal.tsx`**: Full-screen modal that shows a classical certificate styling for `PEHLA KITAAB` with custom border coordinates.
 *   **`SimulationControls.tsx`**: Renders three options for debugging context engines synchronously.
 
 ---
 
-## 🗃️ Data Models & TypeScript Interfaces
+## ðŸ—ƒï¸ Data Models & TypeScript Interfaces
 
 EasyReads is strictly typed to prevent state mutation bugs. Here are the core data models:
 
@@ -202,7 +211,7 @@ interface DefinitionResult {
 
 ---
 
-## 🚀 Getting Started & Installation
+## ðŸš€ Getting Started & Installation
 
 ### Prerequisites
 Make sure you have Node.js and the Expo CLI installed.
@@ -226,20 +235,20 @@ npm start
 
 ---
 
-## 🔥 Firebase Backend Setup
+## ðŸ”¥ Firebase Backend Setup
 
 EasyRead uses the **Firebase JS SDK** (v12+) so it works in **Expo Go** without custom native code. When configured, reading data syncs to **Cloud Firestore** under the signed-in user's UID. Without config, the app falls back to local demo data.
 
 ### 1. Create a Firebase project
 
 1. Go to [Firebase Console](https://console.firebase.google.com/) and create a project (or use an existing one).
-2. Add a **Web app** (Project settings → Your apps → Web `</>`).
+2. Add a **Web app** (Project settings â†’ Your apps â†’ Web `</>`).
 3. Copy the `firebaseConfig` object values.
 
 ### 2. Enable Authentication & Firestore
 
-1. **Authentication** → Sign-in method → enable **Anonymous** (simplest; no UI required).
-2. **Firestore Database** → Create database (start in test mode for development, then lock down with rules below).
+1. **Authentication** â†’ Sign-in method â†’ enable **Anonymous** (simplest; no UI required).
+2. **Firestore Database** â†’ Create database (start in test mode for development, then lock down with rules below).
 
 ### 3. Configure the app
 
@@ -264,7 +273,7 @@ Restart the Metro bundler after changing `.env`:
 npm start
 ```
 
-> **Never commit `.env`** — it is listed in `.gitignore`. Only `.env.example` with placeholders is tracked.
+> **Never commit `.env`** â€” it is listed in `.gitignore`. Only `.env.example` with placeholders is tracked.
 
 ### 4. Firestore schema
 
@@ -311,7 +320,7 @@ service cloud.firestore {
 ### 6. Offline behavior
 
 - **Web**: Firestore uses persistent IndexedDB cache.
-- **iOS / Android (Expo Go)**: In-memory cache only — writes queue while online during a session; for durable native offline persistence, migrate to `@react-native-firebase/*` with a development build.
+- **iOS / Android (Expo Go)**: In-memory cache only â€” writes queue while online during a session; for durable native offline persistence, migrate to `@react-native-firebase/*` with a development build.
 
 ### Auth approach
 
@@ -319,7 +328,7 @@ service cloud.firestore {
 
 ---
 
-## 🧪 Simulation & Testing Workflows
+## ðŸ§ª Simulation & Testing Workflows
 
 Use the built-in control panel at the bottom of the dashboard screen to verify and debug the engines:
 
@@ -335,3 +344,5 @@ Use the built-in control panel at the bottom of the dashboard screen to verify a
     *   The daily goal badge on the dashboard will dynamically drop from the baseline (e.g., `15`) to the adjusted goal (e.g., `13`).
 3.  **Reset Simulation**:
     *   Click **Reset Simulation State** to restore all mock books, user records, and progress history back to their initial values.
+
+

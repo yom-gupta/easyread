@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ReadingProvider, useReading } from './context/ReadingContext';
 import { MainNavigator } from './navigation/MainNavigator';
 import { OnboardingScreen } from './screens/OnboardingScreen';
+import type { OnboardingPreferences } from './screens/OnboardingScreen';
 import { AuthScreen } from './screens/AuthScreen';
 import { SignUpFormScreen } from './screens/SignUpFormScreen';
 import { LoadingScreen } from './components/LoadingScreen';
@@ -13,25 +14,21 @@ import type { User } from 'firebase/auth';
 type AuthFlowState = 'loading' | 'onboarding' | 'auth' | 'signup' | 'app';
 
 function AppContent() {
-  const { authUser, authLoading } = useReading();
+  const readingContext = useReading();
   const [flowState, setFlowState] = useState<AuthFlowState>('loading');
   const [onboardingSeen, setOnboardingSeen] = useState<boolean | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'error' | 'success' | 'info'>('error');
   const [signupData, setSignupData] = useState<{ uid: string; name: string; email: string } | null>(null);
+  const [onboardingPrefs, setOnboardingPrefs] = useState<OnboardingPreferences | null>(null);
+
+  const { authUser, authLoading } = readingContext || {};
 
   useEffect(() => {
     const checkOnboarding = async () => {
       try {
-        const migrated = await AsyncStorage.getItem('onboarding_migrated_v2');
-        if (!migrated) {
-          await AsyncStorage.removeItem('onboarding_seen');
-          await AsyncStorage.setItem('onboarding_migrated_v2', 'true');
-          setOnboardingSeen(false);
-          return;
-        }
-        const seen = await AsyncStorage.getItem('onboarding_seen');
+        const seen = await AsyncStorage.getItem('onboarding_seen_v3');
         setOnboardingSeen(seen === 'true');
       } catch {
         setOnboardingSeen(false);
@@ -41,6 +38,8 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    if (!readingContext) return;
+    const { authLoading } = readingContext;
     if (authLoading || onboardingSeen === null) return;
 
     if (!onboardingSeen) {
@@ -53,7 +52,7 @@ function AppContent() {
     } else if (flowState !== 'signup') {
       setFlowState('app');
     }
-  }, [authUser, authLoading, onboardingSeen, flowState]);
+  }, [authUser, authLoading, onboardingSeen, flowState, readingContext]);
 
   const showToast = (message: string, type: 'error' | 'success' | 'info' = 'error') => {
     setToastMessage(message);
@@ -74,10 +73,12 @@ function AppContent() {
     }
   };
 
-  const handleOnboardingComplete = async () => {
+  const handleOnboardingComplete = async (prefs: OnboardingPreferences) => {
     try {
-      await AsyncStorage.setItem('onboarding_seen', 'true');
+      await AsyncStorage.setItem('onboarding_seen_v3', 'true');
+      await AsyncStorage.setItem('onboarding_prefs', JSON.stringify(prefs));
     } catch {}
+    setOnboardingPrefs(prefs);
     setOnboardingSeen(true);
     setFlowState('auth');
   };
@@ -85,6 +86,10 @@ function AppContent() {
   const handleSignupComplete = () => {
     setFlowState('app');
   };
+
+  if (!readingContext) {
+    return <LoadingScreen />;
+  }
 
   if (flowState === 'loading') {
     return <LoadingScreen />;

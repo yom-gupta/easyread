@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "easyread",
-    "slug": "easyread",
-    "scheme": "easyread",
+    "name": "EasyReads",
+    "slug": "easyreads",
+    "scheme": "easyreads",
     "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,7 +17,7 @@
       "icon": "./assets/appstore.png"
     },
     "android": {
-      "package": "com.yomgupta.easyread",
+      "package": "com.yomgupta.easyreads",
       "icon": "./assets/icon.png",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",

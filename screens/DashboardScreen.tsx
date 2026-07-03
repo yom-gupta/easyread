@@ -27,6 +27,7 @@ import { LevelUpModal } from '../components/LevelUpModal';
 import { AchievementUnlockModal } from '../components/AchievementUnlockModal';
 import { StreakDetailModal } from '../components/StreakDetailModal';
 import { getBookPageMarkers } from '../utils/bookHelpers';
+import { OnboardingChecklist } from '../components/OnboardingChecklist';
 
 export const DashboardScreen: React.FC = () => {
   const {
@@ -54,6 +55,7 @@ export const DashboardScreen: React.FC = () => {
   const [switchBookModalVisible, setSwitchBookModalVisible] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [streakModalVisible, setStreakModalVisible] = useState(false);
+  const [checklistDismissed, setChecklistDismissed] = useState(false);
 
   const prevPagesRead = useRef(currentBook?.pagesRead || 0);
 
@@ -114,6 +116,10 @@ export const DashboardScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Onboarding Checklist */}
+        {!checklistDismissed && user.currentStreak <= 3 && !currentBook && (
+          <OnboardingChecklist onDismiss={() => setChecklistDismissed(true)} />
+        )}
 
         {/* ── Currently Reading Card ── */}
         <View>

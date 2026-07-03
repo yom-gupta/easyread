@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { TouchableOpacity, Image, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
@@ -36,7 +36,7 @@ export const VocabNotebookCard: React.FC<VocabNotebookCardProps> = ({ onPress })
             <View style={[styles.progressFill, { width: `${Math.min(100, wordCount * 5)}%` }]} />
           </View>
           <Text style={styles.progressMeta}>
-            {wordCount === 0 ? 'Tap to start saving words' : `${wordCount} saved · tap to open`}
+            {wordCount === 0 ? 'Tap to start saving words' : `${wordCount} saved Â· tap to open`}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={COLORS.mutedText} />
@@ -146,3 +146,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+

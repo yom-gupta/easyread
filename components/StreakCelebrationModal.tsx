@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, View, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
@@ -243,3 +243,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 });
+
+

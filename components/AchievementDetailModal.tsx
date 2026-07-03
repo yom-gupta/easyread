@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+﻿import React, { useEffect, useRef } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -67,14 +67,14 @@ export const AchievementDetailModal: React.FC<AchievementDetailModalProps> = ({
 
   const handleShare = async () => {
     try {
-      const message = `🎉 I just unlocked "${achievement.name}" on EasyReads!\n\n${achievement.emoji} ${achievement.description}\n\n+${achievement.xpReward} XP earned!`;
+      const message = `ðŸŽ‰ I just unlocked "${achievement.name}" on EasyReads!\n\n${achievement.emoji} ${achievement.description}\n\n+${achievement.xpReward} XP earned!`;
       
       await Share.share({
         message,
         title: `Achievement Unlocked: ${achievement.name}`,
       });
     } catch {
-      // Share error — ignore
+      // Share error â€” ignore
     }
   };
 
@@ -268,3 +268,5 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
 });
+
+

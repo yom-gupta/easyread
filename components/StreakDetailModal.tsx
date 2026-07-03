@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+﻿import React, { useEffect, useRef } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -63,17 +63,17 @@ export const StreakDetailModal: React.FC<StreakDetailModalProps> = ({
 
   const handleShare = async () => {
     try {
-      const message = `🔥 ${user.currentStreak} Day Reading Streak! 🔥\n\n` +
+      const message = `ðŸ”¥ ${user.currentStreak} Day Reading Streak! ðŸ”¥\n\n` +
         `I've been reading consistently for ${user.currentStreak} days straight on EasyReads!\n\n` +
-        `My longest streak: ${user.longestStreak} days 📚\n\n` +
-        `Join me in building a reading habit! 📖`;
+        `My longest streak: ${user.longestStreak} days ðŸ“š\n\n` +
+        `Join me in building a reading habit! ðŸ“–`;
 
       await Share.share({
         message,
         title: 'My Reading Streak',
       });
     } catch {
-      // Share error — ignore
+      // Share error â€” ignore
     }
   };
 
@@ -473,3 +473,5 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
 });
+
+

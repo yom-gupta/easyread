@@ -854,7 +854,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
 export const useReading = () => {
   const context = useContext(ReadingContext);
   if (!context) {
-    throw new Error('useReading must be used within a ReadingProvider');
+    return null;
   }
   return context;
 };

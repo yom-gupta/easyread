@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -189,7 +189,7 @@ export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onC
   const handleShare = async () => {
     if (!result) return;
     try {
-      const shareMsg = `EasyReads Word of the Day:\n\n✨ ${result.word.toUpperCase()} ${result.phonetic || ''}\n(${result.partOfSpeech}) — ${result.definition}\n\nJoin me in building a mindful reading habit.`;
+      const shareMsg = `EasyReads Word of the Day:\n\nâœ¨ ${result.word.toUpperCase()} ${result.phonetic || ''}\n(${result.partOfSpeech}) â€” ${result.definition}\n\nJoin me in building a mindful reading habit.`;
       const shareResult = await Share.share({ message: shareMsg, title: `Word Share: ${result.word}` });
       if (shareResult.action === Share.sharedAction) {
         setShareFeedback('Card shared successfully!');
@@ -715,3 +715,6 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
 });
+
+
+

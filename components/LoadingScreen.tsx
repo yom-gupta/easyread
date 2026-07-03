@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+﻿import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -115,3 +115,5 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 });
+
+

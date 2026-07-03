@@ -14,7 +14,8 @@ This project implements a complete, self-contained client-side reading engine th
 5. [Code & File Reference](#-code--file-reference)
 6. [Data Models & TypeScript Interfaces](#-data-models--typescript-interfaces)
 7. [Getting Started & Installation](#-getting-started--installation)
-8. [Simulation & Testing Workflows](#-simulation--testing-workflows)
+8. [Firebase Backend Setup](#-firebase-backend-setup)
+9. [Simulation & Testing Workflows](#-simulation--testing-workflows)
 
 ---
 
@@ -85,6 +86,10 @@ easyread/
 │   ├── SimulationControls.tsx      # Developer simulator drawer (skip day, low logs)
 │   ├── UpdateProgressModal.tsx     # Sliding progress logger sheet
 │   └── VocabLookupModal.tsx        # Dictionary Search, local dictionary & share cards
+├── config/
+│   └── firebase.ts            # Firebase JS SDK initialization (Expo Go compatible)
+├── services/
+│   └── firebase/              # Auth + Firestore read/write for reading data
 ├── constants/
 │   └── theme.ts               # Global design tokens (colors, spacings, fonts)
 ├── context/
@@ -172,7 +177,7 @@ interface UserProfile {
   email: string;
   createdAt: string;
   currentStreak: number;
-  streakFreezeAvailable: number; // Maximum value: 2
+  streakFreezeAvailable: number; // Maximum value: 3
   rollingPageAverage: number;    // Calculated rolling page speed
   baselineGoal: number;          // Original standard goal
   currentGoal: number;           // Dynamically scaled goal
@@ -218,6 +223,99 @@ npm start
 *   **Expo Go**: Scan the Metro bundler QR code using your physical device's camera (iOS) or the Expo Go application (Android).
 *   **Android Simulator**: Press `a` in the terminal to launch on an active Android Virtual Device (AVD).
 *   **iOS Simulator**: Press `i` in the terminal to launch on Xcode's simulator.
+
+---
+
+## 🔥 Firebase Backend Setup
+
+EasyRead uses the **Firebase JS SDK** (v12+) so it works in **Expo Go** without custom native code. When configured, reading data syncs to **Cloud Firestore** under the signed-in user's UID. Without config, the app falls back to local demo data.
+
+### 1. Create a Firebase project
+
+1. Go to [Firebase Console](https://console.firebase.google.com/) and create a project (or use an existing one).
+2. Add a **Web app** (Project settings → Your apps → Web `</>`).
+3. Copy the `firebaseConfig` object values.
+
+### 2. Enable Authentication & Firestore
+
+1. **Authentication** → Sign-in method → enable **Anonymous** (simplest; no UI required).
+2. **Firestore Database** → Create database (start in test mode for development, then lock down with rules below).
+
+### 3. Configure the app
+
+```bash
+cp .env.example .env
+```
+
+Fill in your Firebase web config keys in `.env`:
+
+```env
+EXPO_PUBLIC_FIREBASE_API_KEY=...
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=...
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+EXPO_PUBLIC_FIREBASE_APP_ID=...
+```
+
+Restart the Metro bundler after changing `.env`:
+
+```bash
+npm start
+```
+
+> **Never commit `.env`** — it is listed in `.gitignore`. Only `.env.example` with placeholders is tracked.
+
+### 4. Firestore schema
+
+All data is scoped under the authenticated user's UID:
+
+| Path | Document | Contents |
+|------|----------|----------|
+| `users/{uid}` | User profile | Streaks, XP, level, goals, achievements, totals |
+| `users/{uid}/books/{bookId}` | Book | Title, author, pages, status, cover, per-book achievements |
+| `users/{uid}/logs/{logId}` | Progress log | Daily page deltas per book |
+| `users/{uid}/vocab/{wordId}` | Vocab entry | Saved dictionary words + mastery metadata |
+| `users/{uid}/meta/app` | App meta | `currentBookId`, `readingMarkers` |
+
+`bookReadLog` is derived from logs on load and is not stored separately.
+
+### 5. Recommended Firestore security rules
+
+Replace test-mode rules before shipping:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      match /books/{bookId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /logs/{logId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /vocab/{wordId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /meta/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
+```
+
+### 6. Offline behavior
+
+- **Web**: Firestore uses persistent IndexedDB cache.
+- **iOS / Android (Expo Go)**: In-memory cache only — writes queue while online during a session; for durable native offline persistence, migrate to `@react-native-firebase/*` with a development build.
+
+### Auth approach
+
+**Anonymous authentication** signs the user in automatically on first launch and persists the session via AsyncStorage. No login UI is required. Each device gets its own anonymous UID; link accounts later with Firebase Auth if you add email/social sign-in.
 
 ---
 

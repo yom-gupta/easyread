@@ -200,6 +200,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     ]).start(onDone);
   };
 
+  const handleComplete = () => {
+    onComplete();
+  };
+
   const handleNext = () => {
     // Button press animation
     Animated.sequence([
@@ -223,12 +227,8 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
       });
     } else {
       // Final step — animate out and complete
-      animateOut(onComplete);
+      animateOut(handleComplete);
     }
-  };
-
-  const handleSkip = () => {
-    animateOut(onComplete);
   };
 
   const step = STEPS[currentStep];
@@ -284,13 +284,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
       >
         {step.decoration}
       </Animated.Text>
-
-      {/* Skip button */}
-      {!isLast && (
-        <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.7}>
-          <Text style={styles.skipText}>Skip</Text>
-        </TouchableOpacity>
-      )}
 
       {/* Main content area */}
       <View style={styles.contentArea}>
@@ -404,22 +397,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 60,
-  },
-  skipBtn: {
-    position: 'absolute',
-    top: 56,
-    right: 24,
-    zIndex: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  skipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-    letterSpacing: 0.3,
   },
   contentArea: {
     flex: 1,

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   getLevelFromXP,
   getLevelProgress,
@@ -7,10 +7,12 @@ import {
 } from '../utils/xpHelpers';
 import {
   checkAchievements,
-  getAchievementById,
-  perBookId,
   AchievementCheckState,
 } from '../utils/achievementHelpers';
+import { loadReadingData, saveReadingData, onAuthStateChange } from '../services/firebase';
+import type { User } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 // ─────────────────────────────────────────────
 //  DATA INTERFACES
@@ -27,14 +29,14 @@ export interface Book {
   completedAt?: string;
   coverUrl?: string;
   isBookmarked?: boolean;
-  bookAchievements: string[];   // per-book achievement IDs earned for THIS copy
+  bookAchievements: string[];
   totalSessions: number;
 }
 
 export interface ProgressLog {
   id: string;
   bookId: string;
-  dateString: string; // YYYY-MM-DD
+  dateString: string;
   pagesReadDelta: number;
 }
 
@@ -44,28 +46,31 @@ export interface UserProfile {
   email: string;
   createdAt: string;
 
-  // Streak
+  dateOfBirth?: string;
+  age?: number;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+  authProvider?: 'google' | 'email';
+  photoURL?: string;
+  lastLoginAt?: string;
+  onboardingCompleted?: boolean;
+
   currentStreak: number;
   longestStreak: number;
-  lastReadDate: string;           // YYYY-MM-DD
-  streakFreezeAvailable: number;  // max 2
+  lastReadDate: string;
+  streakFreezeAvailable: number;
   streakFreezeUsedToday: boolean;
 
-  // Smart Goal Engine
   rollingPageAverage: number;
   baselineGoal: number;
   currentGoal: number;
 
-  // XP & Level
   totalXP: number;
-  level: number;                  // 1–10
+  level: number;
 
-  // Counts
   achievements: string[];
   totalPagesRead: number;
   totalBooksFinished: number;
 
-  // Social
   vocabSharedCount: number;
   consecutiveGoalDays: number;
 }
@@ -80,7 +85,6 @@ export interface DefinitionResult {
   bookTitle?: string;
   pageLearned?: number;
   dateLearned?: string;
-  // Mastery tracking (Phase 2 quiz system)
   status?: 'new' | 'learning' | 'mastered';
   quizAttempts?: number;
   quizPasses?: number;
@@ -112,6 +116,9 @@ export interface ReadingContextType {
   streakTrigger: StreakTrigger | null;
   pendingAchievements: PendingAchievement[];
   levelUpInfo: LevelInfo | null;
+  authUser: User | null;
+  isAuthenticated: boolean;
+  authLoading: boolean;
   dismissStreakTrigger: () => void;
   dismissPendingAchievement: () => void;
   dismissLevelUp: () => void;
@@ -119,9 +126,6 @@ export interface ReadingContextType {
   addBook: (title: string, author: string, totalPages: number, coverUrl?: string) => void;
   dismissCelebration: () => void;
   dismissProtectionBanner: () => void;
-  simulateSkipDay: () => void;
-  simulateThreeLowEntries: () => void;
-  resetSimulation: () => void;
   getEstimatedCompletionDate: (book: Book) => string;
   saveWord: (word: DefinitionResult) => void;
   removeWord: (word: string) => void;
@@ -129,6 +133,9 @@ export interface ReadingContextType {
   setCurrentBook: (bookId: string) => void;
   updateGoal: (goal: number) => void;
   toggleBookmark: (bookId: string) => void;
+  setUser: (user: UserProfile) => void;
+  setAuthUser: (user: User | null) => void;
+  syncToFirebase: () => void;
 }
 
 const ReadingContext = createContext<ReadingContextType | undefined>(undefined);
@@ -173,104 +180,29 @@ function buildBookReadLogFromLogs(
   }, {});
 }
 
-// ─────────────────────────────────────────────
-//  INITIAL DATA
-// ─────────────────────────────────────────────
-
-const INITIAL_BOOKS: Book[] = [
-  {
-    bookId: 'book-1',
-    title: 'Atomic Habits',
-    author: 'James Clear',
-    totalPages: 200,
-    pagesRead: 90,
-    status: 'reading',
-    startedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    coverUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400',
-    bookAchievements: [],
-    totalSessions: 5,
-  },
-  {
-    bookId: 'book-2',
-    title: 'Deep Work',
-    author: 'Cal Newport',
-    totalPages: 300,
-    pagesRead: 45,
-    status: 'reading',
-    startedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    coverUrl: 'https://images.unsplash.com/photo-1506880018603-83d5b814b5a6?w=400',
-    bookAchievements: [],
-    totalSessions: 3,
-  },
-  {
-    bookId: 'book-3',
-    title: 'Thinking, Fast and Slow',
-    author: 'Daniel Kahneman',
-    totalPages: 490,
-    pagesRead: 120,
-    status: 'reading',
-    startedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-    coverUrl: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400',
-    bookAchievements: [],
-    totalSessions: 4,
-  },
-  {
-    bookId: 'book-4',
-    title: 'The Hobbit',
-    author: 'J.R.R. Tolkien',
-    totalPages: 310,
-    pagesRead: 310,
-    status: 'completed',
-    startedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    completedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    coverUrl: 'https://images.unsplash.com/photo-1629752187687-3d3c7ea3a21b?w=400',
-    bookAchievements: ['book-4__pehla_kitaab'],
-    totalSessions: 12,
-  },
-];
-
-const INITIAL_USER: UserProfile = {
-  uid: 'user-1',
-  displayName: 'Rishabh',
-  email: 'yom@example.com',
-  createdAt: new Date().toISOString(),
-  currentStreak: 5,
-  longestStreak: 5,
-  lastReadDate: getTodayString(),
-  streakFreezeAvailable: 2,
-  streakFreezeUsedToday: false,
-  rollingPageAverage: 10,
-  baselineGoal: 15,
-  currentGoal: 15,
-  totalXP: 250,
-  level: 2,
-  achievements: ['book-4__pehla_kitaab', 'pehla_qadam'],
-  totalPagesRead: 555,
-  totalBooksFinished: 1,
-  vocabSharedCount: 0,
-  consecutiveGoalDays: 0,
-};
-
-const INITIAL_LOGS: ProgressLog[] = [
-  { id: 'log-1', bookId: 'book-1', dateString: getRelativeDateString(-4), pagesReadDelta: 10 },
-  { id: 'log-2', bookId: 'book-1', dateString: getRelativeDateString(-3), pagesReadDelta: 12 },
-  { id: 'log-3', bookId: 'book-1', dateString: getRelativeDateString(-2), pagesReadDelta: 8 },
-  { id: 'log-4', bookId: 'book-1', dateString: getRelativeDateString(-1), pagesReadDelta: 15 },
-  { id: 'log-5', bookId: 'book-1', dateString: getRelativeDateString(0), pagesReadDelta: 10 },
-  { id: 'log-6', bookId: 'book-2', dateString: getRelativeDateString(-3), pagesReadDelta: 20 },
-  { id: 'log-7', bookId: 'book-2', dateString: getRelativeDateString(-1), pagesReadDelta: 25 },
-  { id: 'log-8', bookId: 'book-3', dateString: getRelativeDateString(-5), pagesReadDelta: 15 },
-  { id: 'log-9', bookId: 'book-3', dateString: getRelativeDateString(-2), pagesReadDelta: 18 },
-  { id: 'log-10', bookId: 'book-4', dateString: getRelativeDateString(-10), pagesReadDelta: 40 },
-  { id: 'log-11', bookId: 'book-4', dateString: getRelativeDateString(-8), pagesReadDelta: 50 },
-];
-
-const INITIAL_READING_MARKERS: Record<string, number[]> = {
-  'book-1': [45, 67, 90],
-  'book-2': [45],
-  'book-3': [80, 120],
-  'book-4': [150, 250, 310],
-};
+function createEmptyUserProfile(uid: string): UserProfile {
+  return {
+    uid,
+    displayName: '',
+    email: '',
+    createdAt: new Date().toISOString(),
+    currentStreak: 0,
+    longestStreak: 0,
+    lastReadDate: '',
+    streakFreezeAvailable: 2,
+    streakFreezeUsedToday: false,
+    rollingPageAverage: 10,
+    baselineGoal: 15,
+    currentGoal: 15,
+    totalXP: 0,
+    level: 1,
+    achievements: [],
+    totalPagesRead: 0,
+    totalBooksFinished: 0,
+    vocabSharedCount: 0,
+    consecutiveGoalDays: 0,
+  };
+}
 
 // ─────────────────────────────────────────────
 //  PROVIDER
@@ -279,33 +211,139 @@ const INITIAL_READING_MARKERS: Record<string, number[]> = {
 export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [user, setUser] = useState<UserProfile>(INITIAL_USER);
-  const [books, setBooks] = useState<Book[]>(INITIAL_BOOKS);
-  const [bookReadLog, setBookReadLog] = useState<Record<string, Record<string, number>>>(
-    () => buildBookReadLogFromLogs(INITIAL_LOGS),
-  );
-  const [readingMarkers, setReadingMarkers] = useState<Record<string, number[]>>(
-    INITIAL_READING_MARKERS,
-  );
-  const [logs, setLogs] = useState<ProgressLog[]>(INITIAL_LOGS);
+  const [user, setUser] = useState<UserProfile>(createEmptyUserProfile(''));
+  const [books, setBooks] = useState<Book[]>([]);
+  const [bookReadLog, setBookReadLog] = useState<Record<string, Record<string, number>>>({});
+  const [readingMarkers, setReadingMarkers] = useState<Record<string, number[]>>({});
+  const [logs, setLogs] = useState<ProgressLog[]>([]);
   const [streakWasProtectedYesterday, setStreakWasProtectedYesterday] =
     useState<boolean>(false);
   const [showFirstBookCelebration, setShowFirstBookCelebration] =
     useState<boolean>(false);
   const [vocabNotebook, setVocabNotebook] = useState<DefinitionResult[]>([]);
-  const [currentBookId, setCurrentBookId] = useState<string>('book-1');
+  const [currentBookId, setCurrentBookId] = useState<string>('');
   const [streakTrigger, setStreakTrigger] = useState<StreakTrigger | null>(null);
   const [pendingAchievements, setPendingAchievements] = useState<PendingAchievement[]>([]);
   const [levelUpInfo, setLevelUpInfo] = useState<LevelInfo | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
 
-  // ── Derived ──────────────────────────────────────────────────
+  const uidRef = useRef<string | null>(null);
+  const skipSyncRef = useRef(true);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Auth state listener ──────────────────────────────────
+  useEffect(() => {
+    let unsubscribed = false;
+    let unsubscribeFirebase = () => {};
+
+    const initializeAuthFlow = async () => {
+      if (unsubscribed) return;
+
+      unsubscribeFirebase = onAuthStateChange((firebaseUser) => {
+        if (unsubscribed) return;
+        setAuthUser(firebaseUser);
+        setAuthLoading(false);
+
+        if (firebaseUser) {
+          uidRef.current = firebaseUser.uid;
+          loadCloudData(firebaseUser.uid);
+        } else {
+          uidRef.current = null;
+          setUser(createEmptyUserProfile(''));
+          setBooks([]);
+          setLogs([]);
+          setVocabNotebook([]);
+          setBookReadLog({});
+          setReadingMarkers({});
+          setCurrentBookId('');
+        }
+      });
+    };
+
+    initializeAuthFlow();
+
+    return () => {
+      unsubscribed = true;
+      unsubscribeFirebase();
+    };
+  }, []);
+
+  const loadCloudData = async (uid: string) => {
+    try {
+      skipSyncRef.current = true;
+      const cloudData = await loadReadingData(uid);
+
+      if (cloudData) {
+        setUser(cloudData.user);
+        setBooks(cloudData.books);
+        setLogs(cloudData.logs);
+        setVocabNotebook(cloudData.vocabNotebook);
+        setReadingMarkers(cloudData.readingMarkers);
+        setCurrentBookId(cloudData.currentBookId);
+        setBookReadLog(buildBookReadLogFromLogs(cloudData.logs));
+      } else {
+        setUser(createEmptyUserProfile(uid));
+      }
+    } catch {
+      // Firebase load failed — will sync on next change
+    } finally {
+      skipSyncRef.current = false;
+    }
+  };
+
+  // ── Firebase: debounced sync on state changes ─────────────
+  useEffect(() => {
+    if (!uidRef.current || skipSyncRef.current) return;
+    if (!user.uid) return;
+
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+
+    syncTimeoutRef.current = setTimeout(() => {
+      const uid = uidRef.current;
+      if (!uid) return;
+
+      saveReadingData(uid, {
+        user,
+        books,
+        logs,
+        vocabNotebook,
+        readingMarkers,
+        currentBookId,
+      }).catch(() => {
+        // Firebase sync failed — will retry on next change
+      });
+    }, 800);
+
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    };
+  }, [user, books, logs, vocabNotebook, readingMarkers, currentBookId]);
+
+  const syncToFirebase = () => {
+    const uid = uidRef.current;
+    if (!uid || !user.uid) return;
+
+    saveReadingData(uid, {
+      user,
+      books,
+      logs,
+      vocabNotebook,
+      readingMarkers,
+      currentBookId,
+    }).catch(() => {
+      // Firebase sync failed — will retry on next change
+    });
+  };
+
+  // ── Derived ──────────────────────────────────────────────
   const currentBook =
     books.find(b => b.bookId === currentBookId && b.status === 'reading') ||
     books.find(b => b.status === 'reading') ||
     books[0] ||
     null;
 
-  // ── Vocab helpers ─────────────────────────────────────────────
+  // ── Vocab helpers ─────────────────────────────────────────
   const saveWord = (word: DefinitionResult) => {
     if (!isWordSaved(word.word)) {
       const activeBook = currentBook;
@@ -320,8 +358,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         quizPasses: 0,
       };
       setVocabNotebook(prev => [...prev, enhancedWord]);
-
-      // +5 XP for saving a word
       addXPInternal('word_added', 1);
     }
   };
@@ -361,7 +397,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     setUser(prev => ({ ...prev, baselineGoal: goal, currentGoal: goal }));
   };
 
-  // ── XP / Level ────────────────────────────────────────────────
+  // ── XP / Level ────────────────────────────────────────────
   const addXPInternal = (
     action: Parameters<typeof getXPForAction>[0],
     quantity = 1,
@@ -376,10 +412,8 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
 
       let newFreezeTokens = base.streakFreezeAvailable;
 
-      // +1 freeze token on level-up (capped at 2)
       if (newLevel.level > oldLevel.level) {
         newFreezeTokens = Math.min(2, newFreezeTokens + 1);
-        // Show level-up modal (async)
         setLevelUpInfo(newLevel);
       }
 
@@ -392,7 +426,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  // ── Achievement ───────────────────────────────────────────────
+  // ── Achievement ───────────────────────────────────────────
   const unlockAchievements = (
     ids: string[],
     updatedUser: UserProfile,
@@ -414,13 +448,28 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       };
     });
 
-    // Add earned IDs to user.achievements
+    // Update user achievements
     setUser(prev => ({
       ...prev,
       achievements: [...new Set([...prev.achievements, ...ids])],
     }));
 
-    // Award XP for each achievement
+    // Update per-book achievements: write suffixes into book.bookAchievements array
+    const perBookAchievements = ids.filter(id => id.includes('__'));
+    if (perBookAchievements.length > 0) {
+      setBooks(prev => prev.map(book => {
+        const bookAchs = perBookAchievements.filter(id => id.startsWith(book.bookId + '__'));
+        if (bookAchs.length > 0) {
+          const suffixes = bookAchs.map(id => id.split('__')[1]);
+          return {
+            ...book,
+            bookAchievements: [...new Set([...book.bookAchievements, ...suffixes])],
+          };
+        }
+        return book;
+      }));
+    }
+
     ids.forEach(() => {
       addXPInternal('achievement', 1);
     });
@@ -436,7 +485,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     setLevelUpInfo(null);
   };
 
-  // ── Book completion helpers ────────────────────────────────────
+  // ── Book completion helpers ────────────────────────────────
   const checkFirstBookCompletion = (updatedBooks: Book[]) => {
     const completedCount = updatedBooks.filter(b => b.status === 'completed').length;
     if (completedCount === 1) {
@@ -444,7 +493,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // ── Smart Goal Engine ─────────────────────────────────────────
+  // ── Smart Goal Engine ─────────────────────────────────────
   const calculateRollingAverage = (currentLogs: ProgressLog[]): number => {
     const last5Days = Array.from({ length: 5 }, (_, i) => getRelativeDateString(-i));
     const recentLogs = currentLogs.filter(log => last5Days.includes(log.dateString));
@@ -471,7 +520,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  // ── Main updateProgress ───────────────────────────────────────
+  // ── Main updateProgress ───────────────────────────────────
   const updateProgress = (bookId: string, newPage: number) => {
     const book = books.find(b => b.bookId === bookId);
     if (!book) return;
@@ -483,12 +532,10 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     const todayStr = getTodayString();
     const logHour = new Date().getHours();
 
-    // Was today already logged before this update?
     const readTodayBeforeUpdate = logs.some(
       l => l.dateString === todayStr && l.pagesReadDelta > 0,
     );
 
-    // Update bookReadLog
     setBookReadLog(prev => {
       const bookLog = prev[bookId] || {};
       const existing = bookLog[todayStr] || 0;
@@ -498,7 +545,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       };
     });
 
-    // Update reading markers
     setReadingMarkers(prev => {
       const existing = prev[bookId] || [];
       const page = Math.min(newPage, book.totalPages);
@@ -506,7 +552,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       return { ...prev, [bookId]: [...existing, page].sort((a, b) => a - b) };
     });
 
-    // Update books
     const isBookBeingCompleted = newPage >= book.totalPages && previousPage < book.totalPages;
     const updatedBooks = books.map(b => {
       if (b.bookId === bookId) {
@@ -527,7 +572,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       checkFirstBookCompletion(updatedBooks);
     }
 
-    // Update logs
     let updatedLogs = [...logs];
     const existingLogIdx = logs.findIndex(
       l => l.bookId === bookId && l.dateString === todayStr,
@@ -547,7 +591,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     setLogs(updatedLogs);
 
-    // Rolling average + smart goal
     const newRollingAvg = calculateRollingAverage(updatedLogs);
     const uniqueLogsByDate = updatedLogs.reduce((acc: Record<string, number>, cur) => {
       acc[cur.dateString] = (acc[cur.dateString] || 0) + cur.pagesReadDelta;
@@ -578,19 +621,16 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     }
 
-    // Daily goal hit?
     const totalTodayPages = (uniqueLogsByDate[todayStr] || 0);
     const goalHitToday =
       totalTodayPages >= user.currentGoal &&
-      (totalTodayPages - delta) < user.currentGoal; // just crossed the goal
+      (totalTodayPages - delta) < user.currentGoal;
 
-    // Consecutive goal days
     let newConsecutiveGoalDays = user.consecutiveGoalDays;
     if (goalHitToday) {
       newConsecutiveGoalDays += 1;
     }
 
-    // ── STREAK EVALUATION ─────────────────────────────────────
     let nextStreak = user.currentStreak;
     let triggerAnimation: StreakTrigger | null = null;
     let nextFreezeTokens = user.streakFreezeAvailable;
@@ -625,7 +665,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
 
-      // +1 freeze token on every 2-day streak milestone (capped at 2)
       if (nextStreak > 0 && nextStreak % 2 === 0 && !triggerAnimation?.isBreak) {
         nextFreezeTokens = Math.min(2, nextFreezeTokens + 1);
       }
@@ -633,7 +672,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const newLongestStreak = Math.max(user.longestStreak, nextStreak);
 
-    // ── XP for pages ──────────────────────────────────────────
     const pageXP = getXPForAction('page_read', delta);
     const goalBonusXP = goalHitToday ? getXPForAction('daily_goal_hit') : 0;
     const bookCompletionXP = isBookBeingCompleted ? getXPForAction('book_completed') : 0;
@@ -651,7 +689,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     const oldLevel = getLevelFromXP(user.totalXP);
     const newLevelInfo = getLevelFromXP(newTotalXP);
 
-    // +1 freeze token on level-up
     let levelUpFreezeBonus = 0;
     if (newLevelInfo.level > oldLevel.level) {
       levelUpFreezeBonus = 1;
@@ -663,7 +700,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     const newTotalBooksFinished =
       user.totalBooksFinished + (isBookBeingCompleted ? 1 : 0);
 
-    // Prepare updated user (for achievement check)
     const updatedUser: UserProfile = {
       ...user,
       rollingPageAverage: newRollingAvg,
@@ -685,7 +721,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       setStreakTrigger(triggerAnimation);
     }
 
-    // ── Achievement check ─────────────────────────────────────
     const activeBook = updatedBooks.find(b => b.bookId === bookId);
     const activeBookDaysLogged = new Set(
       updatedLogs.filter(l => l.bookId === bookId).map(l => l.dateString),
@@ -694,7 +729,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       v => v.bookId === bookId,
     ).length;
 
-    // Days since last read (before today)
     const lastReadDate = user.lastReadDate;
     const todayDate = new Date(todayStr);
     const lastDate = new Date(lastReadDate);
@@ -775,87 +809,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
   const dismissProtectionBanner = () => setStreakWasProtectedYesterday(false);
   const dismissStreakTrigger = () => setStreakTrigger(null);
 
-  // ── SIMULATION HANDLERS ────────────────────────────────────────
-  const simulateSkipDay = () => {
-    const uniqueDaysLastWeekCount = getUniqueReadingDaysCount(logs, -6, 0);
-    if (uniqueDaysLastWeekCount >= 3) {
-      setStreakWasProtectedYesterday(true);
-    } else if (user.streakFreezeAvailable > 0) {
-      setUser(prev => ({
-        ...prev,
-        streakFreezeAvailable: prev.streakFreezeAvailable - 1,
-        streakFreezeUsedToday: true,
-      }));
-      setStreakWasProtectedYesterday(true);
-    } else {
-      setUser(prev => ({ ...prev, currentStreak: 0 }));
-      setStreakWasProtectedYesterday(false);
-      setStreakTrigger({ visible: true, count: 0, isBreak: true });
-    }
-  };
-
-  const simulateThreeLowEntries = () => {
-    const tempLogs = [...logs];
-    const dayMinus2 = getRelativeDateString(-2);
-    const dayMinus1 = getRelativeDateString(-1);
-    const dayToday = getRelativeDateString(0);
-    let filteredLogs = tempLogs.filter(
-      l =>
-        l.dateString !== dayMinus2 &&
-        l.dateString !== dayMinus1 &&
-        l.dateString !== dayToday,
-    );
-    filteredLogs.push({
-      id: 'sim-log-1',
-      bookId: 'book-1',
-      dateString: dayMinus2,
-      pagesReadDelta: 3,
-    });
-    filteredLogs.push({
-      id: 'sim-log-2',
-      bookId: 'book-1',
-      dateString: dayMinus1,
-      pagesReadDelta: 2,
-    });
-    filteredLogs.push({
-      id: 'sim-log-3',
-      bookId: 'book-1',
-      dateString: dayToday,
-      pagesReadDelta: 4,
-    });
-    setLogs(filteredLogs);
-    const averageRead = (3 + 2 + 4) / 3;
-    const deviation = user.baselineGoal - averageRead;
-    const calculatedGoal = user.baselineGoal - deviation * 0.2;
-    const adjustedGoal = Math.max(1, Math.round(calculatedGoal));
-    const newRollingAvg = calculateRollingAverage(filteredLogs);
-    setBooks(prev =>
-      prev.map(b =>
-        b.bookId === 'book-1'
-          ? { ...b, pagesRead: 99, status: 'reading' as const }
-          : b,
-      ),
-    );
-    setUser(prev => ({
-      ...prev,
-      rollingPageAverage: newRollingAvg,
-      currentGoal: adjustedGoal,
-    }));
-  };
-
-  const resetSimulation = () => {
-    setUser(INITIAL_USER);
-    setBooks(INITIAL_BOOKS);
-    setLogs(INITIAL_LOGS);
-    setBookReadLog(buildBookReadLogFromLogs(INITIAL_LOGS));
-    setReadingMarkers(INITIAL_READING_MARKERS);
-    setStreakWasProtectedYesterday(false);
-    setShowFirstBookCelebration(false);
-    setStreakTrigger(null);
-    setPendingAchievements([]);
-    setLevelUpInfo(null);
-  };
-
   return (
     <ReadingContext.Provider
       value={{
@@ -871,6 +824,9 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         streakTrigger,
         pendingAchievements,
         levelUpInfo,
+        authUser,
+        isAuthenticated: !!authUser,
+        authLoading,
         dismissStreakTrigger,
         dismissPendingAchievement,
         dismissLevelUp,
@@ -878,9 +834,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         addBook,
         dismissCelebration,
         dismissProtectionBanner,
-        simulateSkipDay,
-        simulateThreeLowEntries,
-        resetSimulation,
         getEstimatedCompletionDate,
         saveWord,
         removeWord,
@@ -888,6 +841,9 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         setCurrentBook,
         updateGoal,
         toggleBookmark,
+        setUser,
+        setAuthUser,
+        syncToFirebase,
       }}
     >
       {children}

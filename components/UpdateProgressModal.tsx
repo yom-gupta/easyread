@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Modal,
   StyleSheet,
@@ -24,7 +24,7 @@ interface UpdateProgressModalProps {
   onUpdate: (bookId: string, newPage: number) => void;
 }
 
-const { width: W, height: H } = Dimensions.get("window");
+const { height: H } = Dimensions.get("window");
 
 // ─── Page-stack config ───────────────────────────────────────────────────────
 const MAX_LAYERS = 8;
@@ -40,41 +40,16 @@ function getShadow(added: number) {
   return Math.min(0.08 + (added - 10) * 0.008, 0.35);
 }
 
-// ─── Particle config ─────────────────────────────────────────────────────────
-// Each particle has an absolute start position (x/y on screen) plus
-// a peak and end position. We drive all motion via translateX/Y.
-const PARTICLES = [
-  // Left side — start from left edge at varying heights
-  { id: "l1", icon: "paper-plane", color: "#4A7C59", size: 28, sx: -32, sy: H * 0.55, px: W * 0.28, py: H * 0.08, ex: W * 0.45, ey: H * 0.92, delay: 0 },
-  { id: "l2", icon: "leaf", color: "#4CAF50", size: 22, sx: -28, sy: H * 0.60, px: W * 0.22, py: H * 0.05, ex: W * 0.40, ey: H * 0.95, delay: 80 },
-  { id: "l3", icon: "flower", color: "#E8A838", size: 24, sx: -20, sy: H * 0.50, px: W * 0.32, py: H * 0.10, ex: W * 0.50, ey: H * 0.90, delay: 160 },
-  { id: "l4", icon: "leaf-outline", color: "#81C784", size: 18, sx: -24, sy: H * 0.58, px: W * 0.18, py: H * 0.12, ex: W * 0.35, ey: H * 0.93, delay: 240 },
-  { id: "l5", icon: "paper-plane", color: "#2E7D32", size: 20, sx: -18, sy: H * 0.62, px: W * 0.25, py: H * 0.07, ex: W * 0.42, ey: H * 0.88, delay: 120 },
-  { id: "l6", icon: "flower-outline", color: "#F59E0B", size: 16, sx: -22, sy: H * 0.52, px: W * 0.15, py: H * 0.15, ex: W * 0.38, ey: H * 0.94, delay: 300 },
-  // Right side — start from right edge
-  { id: "r1", icon: "paper-plane", color: "#4A7C59", size: 28, sx: W + 32, sy: H * 0.55, px: W * 0.72, py: H * 0.08, ex: W * 0.55, ey: H * 0.92, delay: 40 },
-  { id: "r2", icon: "leaf", color: "#2E7D32", size: 22, sx: W + 28, sy: H * 0.60, px: W * 0.78, py: H * 0.05, ex: W * 0.60, ey: H * 0.95, delay: 100 },
-  { id: "r3", icon: "flower-outline", color: "#F59E0B", size: 26, sx: W + 20, sy: H * 0.50, px: W * 0.68, py: H * 0.10, ex: W * 0.50, ey: H * 0.90, delay: 180 },
-  { id: "r4", icon: "leaf-outline", color: "#66BB6A", size: 18, sx: W + 24, sy: H * 0.58, px: W * 0.82, py: H * 0.12, ex: W * 0.65, ey: H * 0.93, delay: 260 },
-  { id: "r5", icon: "paper-plane", color: "#1B5E20", size: 20, sx: W + 18, sy: H * 0.62, px: W * 0.75, py: H * 0.07, ex: W * 0.58, ey: H * 0.88, delay: 60 },
-  { id: "r6", icon: "flower", color: "#E8A838", size: 16, sx: W + 22, sy: H * 0.52, px: W * 0.85, py: H * 0.15, ex: W * 0.62, ey: H * 0.94, delay: 320 },
-];
-
 // ─── Component ───────────────────────────────────────────────────────────────
 export const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
   visible, onClose, book, onUpdate,
 }) => {
   const [pageInput, setPageInput] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isCelebrating, setIsCelebrating] = useState(false);
-
   // Card animation — single value drives opacity + position
   const cardOpacity = useRef(new Animated.Value(0)).current;
   const cardTranslateY = useRef(new Animated.Value(60)).current;
   const cardRotate = useRef(new Animated.Value(0)).current;
-
-  // Per-particle progress (0 → 1)
-  const particleAnims = useMemo(() => PARTICLES.map(() => new Animated.Value(0)), []);
 
   // Track whether modal was already open — prevents reset when `book` updates after onUpdate()
   const wasVisible = useRef(false);
@@ -88,10 +63,8 @@ export const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
       cardOpacity.setValue(0);
       cardTranslateY.setValue(60);
       cardRotate.setValue(0);
-      particleAnims.forEach(a => a.setValue(0));
       setPageInput("");
       setErrorMsg(null);
-      setIsCelebrating(false);
 
       // Entry: slide up + fade in
       Animated.parallel([
@@ -146,24 +119,9 @@ export const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
         easing: Easing.in(Easing.quad), useNativeDriver: true,
       }),
     ]).start(() => {
-      // Progress updates right after exit
+      // Progress updates right after exit, then close
       onUpdate(book.bookId, newPage);
-
-      // Trigger celebration
-      setIsCelebrating(true);
-      Animated.parallel(
-        particleAnims.map((a, i) =>
-          Animated.timing(a, {
-            toValue: 1,
-            duration: 1600,
-            delay: PARTICLES[i].delay,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          })
-        )
-      ).start(() => {
-        onClose();
-      });
+      onClose();
     });
   };
 
@@ -283,56 +241,6 @@ export const UpdateProgressModal: React.FC<UpdateProgressModalProps> = ({
           </View>
         </Animated.View>
 
-        {/* ── Celebration particles ───────────────────────────────── */}
-        {isCelebrating && (
-          <View style={styles.particleLayer} pointerEvents="none">
-            {PARTICLES.map((p, i) => {
-              const a = particleAnims[i];
-
-              // Arc path: start → peak → end
-              const tx = a.interpolate({
-                inputRange: [0, 0.4, 1],
-                outputRange: [p.sx, p.px, p.ex],
-              });
-              const ty = a.interpolate({
-                inputRange: [0, 0.4, 1],
-                outputRange: [p.sy, p.py, p.ey],
-              });
-              const rot = a.interpolate({
-                inputRange: [0, 1],
-                outputRange: ["0deg", p.sx < 0 ? "600deg" : "-600deg"],
-              });
-              const sc = a.interpolate({
-                inputRange: [0, 0.2, 0.75, 1],
-                outputRange: [0.4, 1.3, 1.0, 0.3],
-              });
-              const op = a.interpolate({
-                inputRange: [0, 0.08, 0.75, 1],
-                outputRange: [0, 1, 1, 0],
-              });
-
-              return (
-                <Animated.View
-                  key={p.id}
-                  style={[
-                    styles.particle,
-                    {
-                      opacity: op,
-                      transform: [
-                        { translateX: tx },
-                        { translateY: ty },
-                        { rotate: rot },
-                        { scale: sc },
-                      ],
-                    },
-                  ]}
-                >
-                  <Ionicons name={p.icon as any} size={p.size} color={p.color} />
-                </Animated.View>
-              );
-            })}
-          </View>
-        )}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -427,13 +335,4 @@ const styles = StyleSheet.create({
   },
   saveText: { color: COLORS.white, fontWeight: "700", fontSize: 14 },
 
-  // Particles
-  particleLayer: {
-    position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 999,
-  },
-  particle: {
-    position: "absolute",
-    top: 0, left: 0,   // anchor at origin; translateX/Y drives absolute screen position
-    justifyContent: "center", alignItems: "center",
-  },
 });

@@ -12,6 +12,7 @@ import {
   ScrollView,
   Animated,
   Dimensions,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
@@ -23,39 +24,6 @@ interface VocabLookupModalProps {
   visible: boolean;
   onClose: () => void;
 }
-
-const LOCAL_DICT_FALLBACK: Record<string, DefinitionResult> = {
-  resilient: {
-    word: 'resilient',
-    phonetic: '/rɪˈzɪliənt/',
-    partOfSpeech: 'adjective',
-    definition: 'Able to withstand or recover quickly from difficult conditions; strong and adaptable.',
-  },
-  mindful: {
-    word: 'mindful',
-    phonetic: '/ˈmaɪndfl/',
-    partOfSpeech: 'adjective',
-    definition: 'Consciously aware of something; focusing on the present moment with acceptance and calm.',
-  },
-  reading: {
-    word: 'reading',
-    phonetic: '/ˈriːdɪŋ/',
-    partOfSpeech: 'noun',
-    definition: 'The action or skill of reading written or printed matter; an active pathway to quiet reflection.',
-  },
-  habit: {
-    word: 'habit',
-    phonetic: '/ˈhæbɪt/',
-    partOfSpeech: 'noun',
-    definition: 'A settled or regular tendency or practice, especially one that is hard to give up.',
-  },
-  calm: {
-    word: 'calm',
-    phonetic: '/kɑːm/',
-    partOfSpeech: 'adjective',
-    definition: 'Not showing or feeling nervousness, anger, or other strong emotions; peaceful.',
-  },
-};
 
 type TabType = 'search' | 'notebook';
 
@@ -72,20 +40,24 @@ export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onC
   const [savedFeedback, setSavedFeedback] = useState(false);
 
   // Animation values
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const panY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const resultFade = useRef(new Animated.Value(0)).current;
   const resultSlide = useRef(new Animated.Value(20)).current;
+  const isDismissing = useRef(false);
 
   useEffect(() => {
     if (visible) {
+      isDismissing.current = false;
+      panY.setValue(SCREEN_HEIGHT);
+      fadeAnim.setValue(0);
       // Sheet slides up, backdrop fades in
       Animated.parallel([
-        Animated.spring(slideAnim, {
+        Animated.spring(panY, {
           toValue: 0,
           tension: 70,
           friction: 12,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -93,12 +65,12 @@ export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onC
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
+    } else if (!isDismissing.current) {
       Animated.parallel([
-        Animated.timing(slideAnim, {
+        Animated.timing(panY, {
           toValue: SCREEN_HEIGHT,
           duration: 280,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
@@ -108,6 +80,33 @@ export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onC
       ]).start();
     }
   }, [visible]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onPanResponderMove: (_, gs) => {
+        panY.setValue(Math.max(0, gs.dy));
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120) {
+          isDismissing.current = true;
+          Animated.timing(panY, {
+            toValue: SCREEN_HEIGHT,
+            duration: 200,
+            useNativeDriver: false,
+          }).start(() => onClose());
+        } else {
+          Animated.spring(panY, {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: false,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // Animate result card in when result changes
   useEffect(() => {
@@ -167,28 +166,9 @@ export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onC
         }
       }
 
-      if (LOCAL_DICT_FALLBACK[cleanWord]) {
-        setResult(LOCAL_DICT_FALLBACK[cleanWord]);
-      } else {
-        setResult({
-          word: searchWord.trim(),
-          phonetic: `/${cleanWord}/`,
-          partOfSpeech: 'noun',
-          definition: `[Offline/Demo fallback] An inspiring concept representing clarity, mindfulness, and the peaceful journey of discovery.`,
-        });
-      }
-    } catch (err) {
-      console.warn('Dictionary API error, falling back to local mock', err);
-      if (LOCAL_DICT_FALLBACK[cleanWord]) {
-        setResult(LOCAL_DICT_FALLBACK[cleanWord]);
-      } else {
-        setResult({
-          word: searchWord.trim(),
-          phonetic: `/${cleanWord}/`,
-          partOfSpeech: 'concept',
-          definition: `A word discovered during a mindful reading session on EasyReads.`,
-        });
-      }
+      setErrorMsg('Word not found. Please try another word.');
+    } catch {
+      setErrorMsg('Network error. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -248,11 +228,11 @@ export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onC
       <Animated.View
         style={[
           styles.sheetWrapper,
-          { transform: [{ translateY: slideAnim }] },
+          { transform: [{ translateY: panY }] },
         ]}
       >
         {/* Drag handle */}
-        <View style={styles.handle} />
+        <View style={styles.handle} {...panResponder.panHandlers} />
 
         <View style={styles.modalContent}>
           {/* Header */}

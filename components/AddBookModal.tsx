@@ -24,12 +24,20 @@ interface AddBookModalProps {
 
 type Step = 'search' | 'confirm' | 'manual';
 
+interface OpenLibraryBook {
+  title?: string;
+  author_name?: string[];
+  number_of_pages_median?: number;
+  number_of_pages?: number;
+  cover_i?: number;
+}
+
 export const AddBookModal: React.FC<AddBookModalProps> = ({ visible, onClose }) => {
   const { addBook } = useReading();
 
   const [step, setStep] = useState<Step>('search');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<OpenLibraryBook[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
   const [title, setTitle] = useState('');
@@ -68,14 +76,14 @@ export const AddBookModal: React.FC<AddBookModalProps> = ({ visible, onClose }) 
         const data = await response.json();
         if (data?.docs) setSearchResults(data.docs);
       }
-    } catch (e) {
-      console.log('OpenLibrary Search failed:', e);
+    } catch {
+      // OpenLibrary search failed
     } finally {
       setSearchLoading(false);
     }
   };
 
-  const handleSelectBook = (item: any) => {
+  const handleSelectBook = (item: OpenLibraryBook) => {
     setTitle(item.title || '');
     setAuthor(item.author_name ? item.author_name.join(', ') : 'Unknown Author');
     const pages = item.number_of_pages_median || item.number_of_pages || '';

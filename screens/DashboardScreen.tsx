@@ -25,6 +25,7 @@ import { ReadingProgressBar } from '../components/ReadingProgressBar';
 import { ReadingCompanion } from '../components/ReadingCompanion';
 import { LevelUpModal } from '../components/LevelUpModal';
 import { AchievementUnlockModal } from '../components/AchievementUnlockModal';
+import { StreakDetailModal } from '../components/StreakDetailModal';
 import { getBookPageMarkers } from '../utils/bookHelpers';
 
 export const DashboardScreen: React.FC = () => {
@@ -52,6 +53,7 @@ export const DashboardScreen: React.FC = () => {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [switchBookModalVisible, setSwitchBookModalVisible] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [streakModalVisible, setStreakModalVisible] = useState(false);
 
   const prevPagesRead = useRef(currentBook?.pagesRead || 0);
 
@@ -102,28 +104,39 @@ export const DashboardScreen: React.FC = () => {
             <Text style={styles.greetingSub}>Good reading,</Text>
             <Text style={styles.greetingName}>{user.displayName}</Text>
           </View>
-          <View style={styles.streakBadge}>
+          <TouchableOpacity 
+            style={styles.streakBadge}
+            onPress={() => setStreakModalVisible(true)}
+            activeOpacity={0.7}
+          >
             <Ionicons name="flame" size={16} color="#F97316" />
             <Text style={styles.streakText}>{user.currentStreak}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
 
         {/* ── Currently Reading Card ── */}
-        {currentBook ? (
-          isSearchActive ? (
-            <TouchableOpacity
-              style={[styles.bookCard, styles.bookCardCompact]}
-              activeOpacity={0.7}
-              onPress={() => setAnalyticsModalVisible(true)}
-            >
-              <View style={styles.bookRowCompact}>
-                <Image source={{ uri: currentBook.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=200' }} style={styles.bookCoverCompact} />
-                <Text style={styles.bookTitleCompact} numberOfLines={1}>{currentBook.title}</Text>
-                <Text style={styles.progressPctCompact}>{progressPercent}%</Text>
-              </View>
-            </TouchableOpacity>
-          ) : (
+        <View>
+          {currentBook ? (
+            isSearchActive ? (
+              <TouchableOpacity
+                style={[styles.bookCard, styles.bookCardCompact]}
+                activeOpacity={0.7}
+                onPress={() => setAnalyticsModalVisible(true)}
+              >
+                <View style={styles.bookRowCompact}>
+                  {currentBook.coverUrl ? (
+                    <Image source={{ uri: currentBook.coverUrl }} style={styles.bookCoverCompact} />
+                  ) : (
+                    <View style={styles.bookCoverCompact}>
+                      <Ionicons name="book" size={16} color={COLORS.accent} />
+                    </View>
+                  )}
+                  <Text style={styles.bookTitleCompact} numberOfLines={1}>{currentBook.title}</Text>
+                  <Text style={styles.progressPctCompact}>{progressPercent}%</Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
             <View style={styles.bookCard}>
               {/* Book header */}
               <View style={styles.cardHeaderRow}>
@@ -145,7 +158,13 @@ export const DashboardScreen: React.FC = () => {
               >
                 <View style={styles.bookRow}>
                   {/* Book Cover Image */}
-                  <Image source={{ uri: currentBook.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=200' }} style={styles.bookCover} />
+                  {currentBook.coverUrl ? (
+                    <Image source={{ uri: currentBook.coverUrl }} style={styles.bookCover} />
+                  ) : (
+                    <View style={styles.bookCover}>
+                      <Ionicons name="book" size={24} color={COLORS.accent} />
+                    </View>
+                  )}
                   <View style={styles.bookInfo}>
                     <Text style={styles.bookTitle} numberOfLines={2}>{currentBook.title}</Text>
                     <Text style={styles.bookAuthor}>{currentBook.author}</Text>
@@ -196,6 +215,8 @@ export const DashboardScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         )}
+        </View>
+
         {/* ── Word Lookup Search Bar ── */}
         <InlineDictionarySearch
           onOpenNotebook={() => setVocabModalVisible(true)}
@@ -203,7 +224,7 @@ export const DashboardScreen: React.FC = () => {
         />
 
         {/* Warm Reading Companion filling the empty space */}
-        <ReadingCompanion />
+        {!isSearchActive && <ReadingCompanion />}
 
         {/* Simulation (dev tool) */}
 
@@ -252,6 +273,12 @@ export const DashboardScreen: React.FC = () => {
           onDismiss={dismissPendingAchievement}
         />
       )}
+      
+      {/* New Detail Modals */}
+      <StreakDetailModal
+        visible={streakModalVisible}
+        onClose={() => setStreakModalVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -369,6 +396,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginRight: SPACING.md,
     backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bookCoverCompact: {
     width: 32,
@@ -376,6 +405,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginRight: SPACING.sm,
     backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bookInfo: {
     flex: 1,

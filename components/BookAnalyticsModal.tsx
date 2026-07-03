@@ -1,11 +1,14 @@
 import React from 'react';
-import { Modal, StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated, Dimensions, Image } from 'react-native';
+import {
+  Modal, StyleSheet, Text, View, TouchableOpacity, ScrollView, Animated, Dimensions, Image, PanResponder
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { Book, useReading } from '../context/ReadingContext';
 import { PerBookHeatmap } from './PerBookHeatmap';
 import { ReadingProgressBar } from './ReadingProgressBar';
 import { getBookBadges, getBookDailyPages, getBookPageMarkers } from '../utils/bookHelpers';
+import { getPerBookTemplate } from '../utils/achievementHelpers';
 
 interface BookAnalyticsModalProps {
   visible: boolean;
@@ -17,21 +20,25 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible, onClose, book }) => {
   const { vocabNotebook, logs, readingMarkers, currentBook, setCurrentBook } = useReading();
-  const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const panY = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const contentFadeAnim = React.useRef(new Animated.Value(0)).current;
   const contentTranslateY = React.useRef(new Animated.Value(20)).current;
+  const isDismissing = React.useRef(false);
 
   React.useEffect(() => {
     if (visible) {
+      isDismissing.current = false;
+      panY.setValue(SCREEN_HEIGHT);
+      fadeAnim.setValue(0);
       contentFadeAnim.setValue(0);
       contentTranslateY.setValue(20);
       Animated.parallel([
-        Animated.spring(slideAnim, {
+        Animated.spring(panY, {
           toValue: 0,
           tension: 70,
           friction: 12,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -53,12 +60,12 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
           })
         ]).start();
       });
-    } else {
+    } else if (!isDismissing.current) {
       Animated.parallel([
-        Animated.timing(slideAnim, {
+        Animated.timing(panY, {
           toValue: SCREEN_HEIGHT,
           duration: 280,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
@@ -74,6 +81,33 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
     }
   }, [visible]);
 
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onPanResponderMove: (_, gs) => {
+        panY.setValue(Math.max(0, gs.dy));
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 120) {
+          isDismissing.current = true;
+          Animated.timing(panY, {
+            toValue: SCREEN_HEIGHT,
+            duration: 200,
+            useNativeDriver: false,
+          }).start(() => onClose());
+        } else {
+          Animated.spring(panY, {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: false,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
   if (!book) return null;
 
   const isCurrent = currentBook?.bookId === book.bookId;
@@ -83,7 +117,7 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
   const daysRead = new Set(bookLogs.map(l => l.dateString)).size;
   const totalPagesRead = bookLogs.reduce((sum, log) => sum + log.pagesReadDelta, 0);
   const averagePace = daysRead > 0 ? Math.round(totalPagesRead / daysRead) : 0;
-  
+
   const bookVocab = vocabNotebook.filter(v => v.bookId === book.bookId);
   const pct = book.totalPages > 0 ? Math.round((book.pagesRead / book.totalPages) * 100) : 0;
   const dailyPages = getBookDailyPages(book.bookId, logs);
@@ -104,10 +138,10 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
       <Animated.View
         style={[
           styles.sheetWrapper,
-          { transform: [{ translateY: slideAnim }] },
+          { transform: [{ translateY: panY }] },
         ]}
       >
-        <View style={styles.handle} />
+        <View style={styles.handle} {...panResponder.panHandlers} />
 
         <View style={styles.modalContent}>
           <View style={styles.header}>
@@ -129,7 +163,7 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
                     )}
                     <Text style={styles.bookTitle} numberOfLines={2}>{book.title}</Text>
                     <Text style={styles.bookAuthor}>by {book.author}</Text>
-                    
+
                     {book.status === 'completed' ? (
                       <View style={styles.completedPill}>
                         <Ionicons name="checkmark-circle" size={12} color={COLORS.accent} />
@@ -216,6 +250,25 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
               </View>
             </View>
 
+            {/* In-Book Achievements Section */}
+            {book.bookAchievements && book.bookAchievements.length > 0 && (
+              <View style={styles.inlineAchSection}>
+                <Text style={styles.sectionTitle}>In-Book Achievements</Text>
+                <View style={styles.inlineAchRow}>
+                  {book.bookAchievements.map((suffix) => {
+                    const template = getPerBookTemplate(suffix);
+                    if (!template) return null;
+                    return (
+                      <View key={suffix} style={styles.inlineAchBadge}>
+                        <Text style={styles.inlineAchEmoji}>{template.emoji}</Text>
+                        <Text style={styles.inlineAchName}>{template.name}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
             {/* Vocabulary Section */}
             <Text style={styles.sectionTitle}>Vocabulary Learned</Text>
             {bookVocab.length === 0 ? (
@@ -233,6 +286,7 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
                 </View>
               ))
             )}
+            <View style={{ marginBottom: 50 }} />
           </ScrollView>
         </View>
       </Animated.View>
@@ -296,6 +350,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACING.lg,
+    paddingBottom: 60,
   },
   unifiedCard: {
     backgroundColor: COLORS.white,
@@ -514,5 +569,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.mutedText,
     lineHeight: 20,
+  },
+  inlineAchSection: {
+    marginBottom: SPACING.lg,
+  },
+  inlineAchRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  inlineAchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '40',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  inlineAchEmoji: {
+    fontSize: 14,
+  },
+  inlineAchName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.text,
   },
 });

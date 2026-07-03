@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,17 +16,26 @@ import { useReading } from '../context/ReadingContext';
 import { getLevelFromXP, getLevelProgress, getXPToNextLevel, LEVEL_TABLE } from '../utils/xpHelpers';
 import {
   GLOBAL_ACHIEVEMENTS,
-  PER_BOOK_TEMPLATES,
-  getAchievementById,
 } from '../utils/achievementHelpers';
 import { AchievementUnlockModal } from '../components/AchievementUnlockModal';
+import { LevelDetailsModal } from '../components/LevelDetailsModal';
+import { AchievementDetailModal } from '../components/AchievementDetailModal';
+import { StreakDetailModal } from '../components/StreakDetailModal';
+import { signOut } from '../services/firebase/authService';
 
 const { width } = Dimensions.get('window');
+const pfp = require('../assets/pfp.png');
 
 const FREEZE_TOKEN_MAX = 2;
 
 export const ProfileScreen: React.FC = () => {
-  const { user, books, logs, updateGoal, pendingAchievements, dismissPendingAchievement } = useReading();
+  const { user, books, logs, updateGoal, pendingAchievements, dismissPendingAchievement, setAuthUser } = useReading();
+
+  // Modal states
+  const [levelModalVisible, setLevelModalVisible] = useState(false);
+  const [streakModalVisible, setStreakModalVisible] = useState(false);
+  const [achievementModalVisible, setAchievementModalVisible] = useState(false);
+  const [selectedAchievement, setSelectedAchievement] = useState<string | null>(null);
 
   const totalPagesRead = user.totalPagesRead || logs.reduce((sum, l) => sum + l.pagesReadDelta, 0);
   const completedBooks = user.totalBooksFinished || books.filter(b => b.status === 'completed').length;
@@ -47,6 +57,22 @@ export const ProfileScreen: React.FC = () => {
   const xpBarWidth = useRef(new Animated.Value(0)).current;
   const [hasAnimated, setHasAnimated] = useState(false);
 
+  // Staggered animations for stats and achievements
+  const statsAnimations = useRef(
+    Array.from({ length: 6 }, () => ({
+      opacity: new Animated.Value(0),
+      translateY: new Animated.Value(30),
+    }))
+  ).current;
+
+  // Initialize achievement animations based on the number of global achievements
+  const achievementAnimations = useRef(
+    Array.from({ length: GLOBAL_ACHIEVEMENTS.length }, () => ({
+      opacity: new Animated.Value(0),
+      translateY: new Animated.Value(20),
+    }))
+  ).current;
+
   const onXPBarLayout = () => {
     if (!hasAnimated) {
       setHasAnimated(true);
@@ -57,6 +83,50 @@ export const ProfileScreen: React.FC = () => {
       }).start();
     }
   };
+
+  // Trigger staggered animations on mount
+  useEffect(() => {
+    // Stats animations
+    const statsAnims = statsAnimations.map((anim, index) =>
+      Animated.parallel([
+        Animated.timing(anim.opacity, {
+          toValue: 1,
+          duration: 400,
+          delay: index * 80,
+          useNativeDriver: true,
+        }),
+        Animated.spring(anim.translateY, {
+          toValue: 0,
+          tension: 80,
+          friction: 10,
+          delay: index * 80,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    Animated.stagger(80, statsAnims).start();
+
+    // Achievements animations (triggered after stats)
+    setTimeout(() => {
+      const achAnims = achievementAnimations.map((anim, index) =>
+        Animated.parallel([
+          Animated.timing(anim.opacity, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: true,
+          }),
+          Animated.spring(anim.translateY, {
+            toValue: 0,
+            tension: 100,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      Animated.stagger(60, achAnims).start();
+    }, 600);
+  }, []);
 
   // Stats
   const stats = [
@@ -83,20 +153,28 @@ export const ProfileScreen: React.FC = () => {
 
         {/* ── Hero Profile Card ── */}
         <View style={styles.heroCard}>
-          {/* Avatar */}
-          <View style={styles.avatarContainer}>
+          {/* Avatar - Clickable to open Level Details */}
+          <TouchableOpacity 
+            style={styles.avatarContainer}
+            onPress={() => setLevelModalVisible(true)}
+            activeOpacity={0.7}
+          >
             <View style={[styles.avatar, { borderColor: levelInfo.color }]}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
+              <Image source={pfp} style={styles.avatarImage} />
             </View>
             {/* Level badge overlapping avatar */}
             <View style={[styles.levelBadgeFloat, { backgroundColor: levelInfo.color }]}>
               <Text style={styles.levelBadgeText}>{levelInfo.level}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
-          {/* Name + level info */}
+          {/* Name + level info - Clickable to open Level Details */}
           <Text style={styles.displayName}>{user.displayName}</Text>
-          <View style={styles.levelRow}>
+          <TouchableOpacity 
+            style={styles.levelRow}
+            onPress={() => setLevelModalVisible(true)}
+            activeOpacity={0.7}
+          >
             <Text style={styles.levelEmoji}>{levelInfo.emoji}</Text>
             <View>
               <Text style={[styles.levelName, { color: levelInfo.color }]}>
@@ -104,7 +182,7 @@ export const ProfileScreen: React.FC = () => {
               </Text>
               <Text style={styles.levelHindi}>{levelInfo.hindiName}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* XP Progress Bar */}
           <View style={styles.xpSection} onLayout={onXPBarLayout}>
@@ -132,8 +210,12 @@ export const ProfileScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Streak Freeze Tokens */}
-          <View style={styles.freezeRow}>
+          {/* Streak Freeze Tokens - Clickable to open Streak Details */}
+          <TouchableOpacity 
+            style={styles.freezeRow}
+            onPress={() => setStreakModalVisible(true)}
+            activeOpacity={0.7}
+          >
             <Ionicons name="snow" size={13} color="#60A5FA" />
             <Text style={styles.freezeLabel}>Streak Freeze:</Text>
             <View style={styles.freezeTokens}>
@@ -158,20 +240,29 @@ export const ProfileScreen: React.FC = () => {
             <Text style={styles.freezeCount}>
               {user.streakFreezeAvailable}/{FREEZE_TOKEN_MAX}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* ── Stats Grid ── */}
         <Text style={styles.sectionLabel}>Reading Summary</Text>
         <View style={styles.statsGrid}>
           {stats.map((stat, i) => (
-            <View key={i} style={styles.statCell}>
+            <Animated.View 
+              key={i} 
+              style={[
+                styles.statCell,
+                {
+                  opacity: statsAnimations[i].opacity,
+                  transform: [{ translateY: statsAnimations[i].translateY }],
+                },
+              ]}
+            >
               <View style={[styles.statIconContainer, { backgroundColor: stat.color + '15' }]}>
                 <Ionicons name={stat.icon} size={16} color={stat.color} />
               </View>
               <Text style={styles.statValue}>{stat.value}</Text>
               <Text style={styles.statLabel}>{stat.label}</Text>
-            </View>
+            </Animated.View>
           ))}
         </View>
 
@@ -213,7 +304,11 @@ export const ProfileScreen: React.FC = () => {
 
         {/* ── Level Progress Map ── */}
         <Text style={styles.sectionLabel}>Level Journey</Text>
-        <View style={styles.levelMapCard}>
+        <TouchableOpacity
+          style={styles.levelMapCard}
+          onPress={() => setLevelModalVisible(true)}
+          activeOpacity={0.7}
+        >
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.levelMapRow}>
               {LEVEL_TABLE.map((lvl, i) => {
@@ -252,7 +347,7 @@ export const ProfileScreen: React.FC = () => {
               })}
             </View>
           </ScrollView>
-        </View>
+        </TouchableOpacity>
 
         {/* ── Global Achievements Grid ── */}
         <Text style={styles.sectionLabel}>
@@ -262,39 +357,53 @@ export const ProfileScreen: React.FC = () => {
           </Text>
         </Text>
         <View style={styles.achievementsGrid}>
-          {allGlobal.map(ach => {
+          {allGlobal.map((ach, i) => {
             const isUnlocked = earned.includes(ach.id);
             return (
-              <View
+              <TouchableOpacity
                 key={ach.id}
-                style={[
-                  styles.achCell,
-                  isUnlocked && styles.achCellUnlocked,
-                ]}
+                activeOpacity={isUnlocked ? 0.7 : 1}
+                onPress={() => {
+                  if (isUnlocked) {
+                    setSelectedAchievement(ach.id);
+                    setAchievementModalVisible(true);
+                  }
+                }}
               >
-                <Text
+                <Animated.View
                   style={[
-                    styles.achCellEmoji,
-                    !isUnlocked && styles.achCellEmojiLocked,
+                    styles.achCell,
+                    isUnlocked && styles.achCellUnlocked,
+                    {
+                      opacity: achievementAnimations[i].opacity,
+                      transform: [{ translateY: achievementAnimations[i].translateY }],
+                    },
                   ]}
                 >
-                  {isUnlocked ? ach.emoji : '🔒'}
-                </Text>
-                <Text
-                  style={[
-                    styles.achCellName,
-                    !isUnlocked && styles.achCellNameLocked,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {isUnlocked ? ach.name : '???'}
-                </Text>
-                {isUnlocked && (
-                  <View style={styles.achXPBadge}>
-                    <Text style={styles.achXPBadgeText}>+{ach.xpReward}</Text>
-                  </View>
-                )}
-              </View>
+                  <Text
+                    style={[
+                      styles.achCellEmoji,
+                      !isUnlocked && styles.achCellEmojiLocked,
+                    ]}
+                  >
+                    {isUnlocked ? ach.emoji : '🔒'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.achCellName,
+                      !isUnlocked && styles.achCellNameLocked,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {isUnlocked ? ach.name : '???'}
+                  </Text>
+                  {isUnlocked && (
+                    <View style={styles.achXPBadge}>
+                      <Text style={styles.achXPBadgeText}>+{ach.xpReward}</Text>
+                    </View>
+                  )}
+                </Animated.View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -307,6 +416,23 @@ export const ProfileScreen: React.FC = () => {
           </Text>
           <Text style={styles.motivationAuthor}>— Dr. Seuss</Text>
         </View>
+
+        {/* ── Sign Out Button ── */}
+        <TouchableOpacity
+          style={styles.signOutButton}
+          onPress={async () => {
+            try {
+              await signOut();
+              setAuthUser(null);
+            } catch {
+              // Sign out error — ignore
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="log-out-outline" size={18} color={COLORS.danger} />
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Achievement modal when triggered from profile actions */}
@@ -316,6 +442,21 @@ export const ProfileScreen: React.FC = () => {
           onDismiss={dismissPendingAchievement}
         />
       )}
+
+      {/* New detail modals */}
+      <LevelDetailsModal
+        visible={levelModalVisible}
+        onClose={() => setLevelModalVisible(false)}
+      />
+      <AchievementDetailModal
+        visible={achievementModalVisible}
+        onClose={() => setAchievementModalVisible(false)}
+        achievementId={selectedAchievement}
+      />
+      <StreakDetailModal
+        visible={streakModalVisible}
+        onClose={() => setStreakModalVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -373,12 +514,12 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  avatarInitials: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.accent,
-    fontFamily: FONTS.serif,
+  avatarImage: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
   },
   levelBadgeFloat: {
     position: 'absolute',
@@ -741,5 +882,25 @@ const styles = StyleSheet.create({
     color: COLORS.gold,
     fontSize: 10,
     fontWeight: '700',
+  },
+
+  // Sign Out
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 14,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  signOutText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.danger,
   },
 });

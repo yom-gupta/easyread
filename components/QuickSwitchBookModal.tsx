@@ -96,10 +96,16 @@ export const QuickSwitchBookModal: React.FC<QuickSwitchBookModalProps> = ({ visi
                     onPress={() => handleSelectBook(book.bookId)}
                     activeOpacity={0.7}
                   >
-                    <Image
-                      source={{ uri: book.coverUrl || 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=200' }}
-                      style={styles.bookCover}
-                    />
+                    {book.coverUrl ? (
+                      <Image
+                        source={{ uri: book.coverUrl }}
+                        style={styles.bookCover}
+                      />
+                    ) : (
+                      <View style={styles.bookCover}>
+                        <Ionicons name="book" size={16} color={COLORS.accent} />
+                      </View>
+                    )}
                     <View style={styles.bookInfo}>
                       <Text style={[styles.bookTitle, isSelected && styles.bookTitleSelected]}>
                         {book.title}
@@ -211,6 +217,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginRight: SPACING.md,
     backgroundColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bookItemSelected: {
     borderColor: COLORS.accent,

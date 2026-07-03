@@ -29,13 +29,19 @@ export const BookHeatmap: React.FC<BookHeatmapProps> = ({ bookId, days = 30 }) =
   const maxPages = Math.max(...Object.values(bookLog), 0);
 
   const getColor = (pages: number) => {
-    if (pages === 0) return '#e0e0e0'; // no activity
-    // simple gradient from light teal to deep teal
+    if (pages === 0) return '#e0e0e0';
     const intensity = maxPages ? pages / maxPages : 0;
-    const hue = 180; // teal
-    const saturation = 30 + Math.round(70 * intensity);
-    const lightness = 80 - Math.round(30 * intensity);
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    const s = (30 + Math.round(70 * intensity)) / 100;
+    const l = (80 - Math.round(30 * intensity)) / 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((180 / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+    if (180 / 60 < 1) { r = c; g = x; b = 0; }
+    else if (180 / 60 < 2) { r = x; g = c; b = 0; }
+    else { r = 0; g = c; b = x; }
+    const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   };
 
   return (

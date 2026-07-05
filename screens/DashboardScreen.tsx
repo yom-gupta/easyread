@@ -271,7 +271,7 @@ export const DashboardScreen: React.FC = () => {
                 activeOpacity={0.85}
               >
                 <Ionicons name="add-circle-outline" size={18} color={COLORS.white} />
-                <Text style={styles.logBtnText}>Log Today's Pages</Text>
+              <Text style={styles.logBtnText}>Log Today's Pages</Text>
               </TouchableOpacity>
             </View>
           )

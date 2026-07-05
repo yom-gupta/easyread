@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { haptics } from '../utils/haptics';
 import { useAndroidBack } from '../utils/useAndroidBack';
+import { analytics, EVENTS } from '../services/analytics';
 import {
   ReminderSettings,
   ReminderTone,
@@ -23,7 +24,6 @@ import {
   scheduleDaily,
   previewCopy,
 } from '../services/notifications';
-import { analytics, EVENTS } from '../services/analytics';
 
 interface Props {
   onClose: () => void;

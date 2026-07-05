@@ -19,16 +19,18 @@ interface BookAnalyticsModalProps {
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible, onClose, book }) => {
-  const { vocabNotebook, logs, readingMarkers, currentBook, setCurrentBook } = useReading();
+  const { vocabNotebook, logs, readingMarkers, currentBook, setCurrentBook, getBookNotes, removeNote } = useReading();
   const panY = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const contentFadeAnim = React.useRef(new Animated.Value(0)).current;
   const contentTranslateY = React.useRef(new Animated.Value(20)).current;
   const isDismissing = React.useRef(false);
+  const [activeSection, setActiveSection] = React.useState<'vocab' | 'notes'>('vocab');
 
   React.useEffect(() => {
     if (visible) {
       isDismissing.current = false;
+      setActiveSection('vocab');
       panY.setValue(SCREEN_HEIGHT);
       fadeAnim.setValue(0);
       contentFadeAnim.setValue(0);
@@ -119,6 +121,7 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
   const averagePace = daysRead > 0 ? Math.round(totalPagesRead / daysRead) : 0;
 
   const bookVocab = vocabNotebook.filter(v => v.bookId === book.bookId);
+  const bookNotes = getBookNotes(book.bookId);
   const pct = book.totalPages > 0 ? Math.round((book.pagesRead / book.totalPages) * 100) : 0;
   const dailyPages = getBookDailyPages(book.bookId, logs);
   const markers = getBookPageMarkers(book.bookId, readingMarkers, vocabNotebook);
@@ -146,8 +149,41 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
         <View style={styles.modalContent}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Book Analytics</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={COLORS.text} />
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.sectionTabs}>
+            <TouchableOpacity
+              style={[styles.sectionTab, activeSection === 'vocab' && styles.sectionTabActive]}
+              onPress={() => setActiveSection('vocab')}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="bookmark-outline"
+                size={14}
+                color={activeSection === 'vocab' ? COLORS.white : COLORS.mutedText}
+              />
+              <Text style={[styles.sectionTabText, activeSection === 'vocab' && styles.sectionTabTextActive]}>
+                Vocabulary
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sectionTab, activeSection === 'notes' && styles.sectionTabActive]}
+              onPress={() => setActiveSection('notes')}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="create-outline"
+                size={14}
+                color={activeSection === 'notes' ? COLORS.white : COLORS.mutedText}
+              />
+              <Text style={[styles.sectionTabText, activeSection === 'notes' && styles.sectionTabTextActive]}>
+                Notes
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -269,22 +305,65 @@ export const BookAnalyticsModal: React.FC<BookAnalyticsModalProps> = ({ visible,
               </View>
             )}
 
-            {/* Vocabulary Section */}
-            <Text style={styles.sectionTitle}>Vocabulary Learned</Text>
-            {bookVocab.length === 0 ? (
-              <Text style={styles.emptyText}>You haven't saved any words from this book yet.</Text>
+            {activeSection === 'vocab' ? (
+              <>
+                <Text style={styles.sectionTitle}>Vocabulary Learned</Text>
+                {bookVocab.length === 0 ? (
+                  <Text style={styles.emptyText}>You haven't saved any words from this book yet.</Text>
+                ) : (
+                  bookVocab.map((word, index) => (
+                    <View key={`${word.word}-${index}`} style={styles.vocabCard}>
+                      <View style={styles.vocabHeader}>
+                        <Text style={styles.vocabWord}>{word.word}</Text>
+                        {word.pageLearned && (
+                          <Text style={styles.vocabPage}>Pg {word.pageLearned}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.vocabDef}>{word.definition}</Text>
+                    </View>
+                  ))
+                )}
+              </>
             ) : (
-              bookVocab.map((word, index) => (
-                <View key={`${word.word}-${index}`} style={styles.vocabCard}>
-                  <View style={styles.vocabHeader}>
-                    <Text style={styles.vocabWord}>{word.word}</Text>
-                    {word.pageLearned && (
-                      <Text style={styles.vocabPage}>Pg {word.pageLearned}</Text>
-                    )}
-                  </View>
-                  <Text style={styles.vocabDef}>{word.definition}</Text>
-                </View>
-              ))
+              <>
+                <Text style={styles.sectionTitle}>Notes</Text>
+                {bookNotes.length === 0 ? (
+                  <Text style={styles.emptyText}>Take your first note for this book.</Text>
+                ) : (
+                  bookNotes.map((item) => (
+                    <View key={item.id} style={styles.noteCard}>
+                      <View style={styles.noteHeader}>
+                        <View style={styles.noteMetaRow}>
+                          <View style={styles.noteKindPill}>
+                            <Text style={styles.noteKindPillText}>
+                              {item.sourceKind === 'scan' ? 'Scan' : 'Typed'}
+                            </Text>
+                          </View>
+                          {item.page ? (
+                            <Text style={styles.notePage}>Page {item.page}</Text>
+                          ) : null}
+                        </View>
+                        <View style={styles.noteActions}>
+                          <TouchableOpacity
+                            onPress={() => removeNote(item.id)}
+                            style={styles.noteIconBtn}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="trash-outline" size={14} color={COLORS.danger} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      <Text style={styles.noteText}>{item.text}</Text>
+                      {item.sectionText ? (
+                        <View style={styles.noteSectionBox}>
+                          <Text style={styles.noteSectionLabel}>Section text</Text>
+                          <Text style={styles.noteSectionText}>{item.sectionText}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ))
+                )}
+              </>
             )}
             <View style={{ marginBottom: 50 }} />
           </ScrollView>
@@ -347,6 +426,40 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: SPACING.xs,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+  },
+  sectionTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  sectionTabActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+  },
+  sectionTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.mutedText,
+  },
+  sectionTabTextActive: {
+    color: COLORS.white,
   },
   scrollContent: {
     padding: SPACING.lg,
@@ -569,6 +682,79 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.mutedText,
     lineHeight: 20,
+  },
+  noteCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  noteHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+    gap: 8,
+  },
+  noteMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    flex: 1,
+  },
+  noteKindPill: {
+    backgroundColor: 'rgba(74, 124, 89, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  noteKindPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.accent,
+    textTransform: 'uppercase',
+  },
+  notePage: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.mutedText,
+  },
+  noteActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  noteIconBtn: {
+    padding: 4,
+  },
+  noteText: {
+    fontSize: 14,
+    color: COLORS.text,
+    lineHeight: 21,
+    marginBottom: SPACING.sm,
+  },
+  noteSectionBox: {
+    backgroundColor: 'rgba(74, 124, 89, 0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(74, 124, 89, 0.12)',
+    padding: SPACING.sm,
+  },
+  noteSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.accent,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  noteSectionText: {
+    fontSize: 13,
+    color: COLORS.mutedText,
+    lineHeight: 19,
   },
   inlineAchSection: {
     marginBottom: SPACING.lg,

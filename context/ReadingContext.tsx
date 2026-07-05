@@ -104,6 +104,17 @@ export interface PendingAchievement {
   bookTitle?: string;
 }
 
+export interface BookNote {
+  id: string;
+  bookId: string;
+  text: string;
+  sectionText?: string;
+  createdAt: string;      // ISO
+  updatedAt: string;      // ISO
+  sourceKind: 'typed' | 'scan';
+  page?: number;
+}
+
 export interface ReadingContextType {
   bookReadLog: Record<string, Record<string, number>>;
   readingMarkers: Record<string, number[]>;
@@ -114,6 +125,7 @@ export interface ReadingContextType {
   streakWasProtectedYesterday: boolean;
   showFirstBookCelebration: boolean;
   vocabNotebook: DefinitionResult[];
+  notes: BookNote[];
   streakTrigger: StreakTrigger | null;
   pendingAchievements: PendingAchievement[];
   levelUpInfo: LevelInfo | null;
@@ -131,6 +143,8 @@ export interface ReadingContextType {
   saveWord: (word: DefinitionResult) => void;
   removeWord: (word: string) => void;
   isWordSaved: (word: string) => boolean;
+  removeNote: (id: string) => void;
+  getBookNotes: (bookId: string) => BookNote[];
   setCurrentBook: (bookId: string) => void;
   updateGoal: (goal: number) => void;
   toggleBookmark: (bookId: string) => void;
@@ -221,6 +235,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
   const [showFirstBookCelebration, setShowFirstBookCelebration] =
     useState<boolean>(false);
   const [vocabNotebook, setVocabNotebook] = useState<DefinitionResult[]>([]);
+  const [notes, setNotes] = useState<BookNote[]>([]);
   const [currentBookId, setCurrentBookId] = useState<string>('');
   const [streakTrigger, setStreakTrigger] = useState<StreakTrigger | null>(null);
   const [pendingAchievements, setPendingAchievements] = useState<PendingAchievement[]>([]);
@@ -266,6 +281,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
             setAuthUser(mockDevUser);
             setAuthLoading(false);
             uidRef.current = 'dev-user';
+            setNotes([]);
             loadCloudData('dev-user');
           }
           return;
@@ -288,6 +304,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
           setBooks([]);
           setLogs([]);
           setVocabNotebook([]);
+          setNotes([]);
           setBookReadLog({});
           setReadingMarkers({});
           setCurrentBookId('');
@@ -334,6 +351,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
           vocabSharedCount: 0,
           consecutiveGoalDays: 4,
         });
+        setNotes([]);
         return;
       }
 
@@ -345,11 +363,13 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         setBooks(cloudData.books);
         setLogs(cloudData.logs);
         setVocabNotebook(cloudData.vocabNotebook);
+        setNotes(cloudData.notes ?? []);
         setReadingMarkers(cloudData.readingMarkers);
         setCurrentBookId(cloudData.currentBookId);
         setBookReadLog(buildBookReadLogFromLogs(cloudData.logs));
       } else {
         setUser(createEmptyUserProfile(uid));
+        setNotes([]);
       }
     } catch (error) {
       console.warn('[EasyRead] Firebase load failed:', error);
@@ -373,6 +393,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         books,
         logs,
         vocabNotebook,
+        notes,
         readingMarkers,
         currentBookId,
       }).catch(error => {
@@ -383,7 +404,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     };
-  }, [user, books, logs, vocabNotebook, readingMarkers, currentBookId]);
+  }, [user, books, logs, vocabNotebook, notes, readingMarkers, currentBookId]);
 
   const syncToFirebase = () => {
     const uid = uidRef.current;
@@ -395,6 +416,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       books,
       logs,
       vocabNotebook,
+      notes,
       readingMarkers,
       currentBookId,
     }).catch(error => {
@@ -438,6 +460,15 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     );
     analytics.logEvent(EVENTS.word_removed, { word: word.slice(0, 40) });
   };
+
+  const removeNote = (id: string) => {
+    setNotes(prev => prev.filter(note => note.id !== id));
+  };
+
+  const getBookNotes = (bookId: string) =>
+    notes
+      .filter(note => note.bookId === bookId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   const toggleBookmark = (bookId: string) => {
     setBooks(prev =>
@@ -621,6 +652,12 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     const isBookBeingCompleted = newPage >= book.totalPages && previousPage < book.totalPages;
+    if (isBookBeingCompleted) {
+      analytics.logEvent(EVENTS.book_completed, {
+        book_id: bookId,
+        title: book.title.slice(0, 60),
+      });
+    }
     const updatedBooks = books.map(b => {
       if (b.bookId === bookId) {
         const isFinished = newPage >= b.totalPages;
@@ -787,7 +824,17 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (triggerAnimation) {
       setStreakTrigger(triggerAnimation);
+      analytics.logEvent(
+        triggerAnimation.isBreak ? EVENTS.streak_broken : EVENTS.streak_extended,
+        { streak_days: triggerAnimation.count },
+      );
     }
+
+    analytics.logEvent(EVENTS.pages_logged, {
+      book_id: bookId,
+      pages_delta: delta,
+      new_page: newPage,
+    });
 
     const activeBook = updatedBooks.find(b => b.bookId === bookId);
     const activeBookDaysLogged = new Set(
@@ -929,6 +976,9 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         saveWord,
         removeWord,
         isWordSaved,
+        notes,
+        removeNote,
+        getBookNotes,
         setCurrentBook,
         updateGoal,
         toggleBookmark,

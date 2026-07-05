@@ -16,9 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.yomgupta.easyread",
       "icon": "./assets/appstore.png",
-      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSUserNotificationUsageDescription": "EasyReads sends you a gentle daily reading nudge and a warning before your streak breaks.",
+        "NSCameraUsageDescription": "EasyReads uses the camera to scan book barcodes so you can add books instantly.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -26,7 +26,6 @@
       "package": "com.yomgupta.easyread",
       "versionCode": 2,
       "icon": "./assets/icon.png",
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -39,15 +38,14 @@
         "USE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
         "VIBRATE",
-        "RECEIVE_BOOT_COMPLETED"
+        "RECEIVE_BOOT_COMPLETED",
+        "CAMERA"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@react-native-firebase/app",
-      "@react-native-firebase/analytics",
       "expo-web-browser",
       [
         "expo-splash-screen",
@@ -64,6 +62,12 @@
         {
           "icon": "./assets/icon.png",
           "color": "#4A7C59"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "EasyReads uses the camera to scan book barcodes so you can add books instantly."
         }
       ]
     ]

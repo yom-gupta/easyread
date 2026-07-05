@@ -28,6 +28,7 @@ export const StreakDetailModal: React.FC<StreakDetailModalProps> = ({
   onClose,
 }) => {
   const { user, logs } = useReading();
+  const shareCardRef = useRef<View>(null);
   const hasLoggedToday = React.useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return logs.some(l => l.dateString === today);
@@ -68,13 +69,15 @@ export const StreakDetailModal: React.FC<StreakDetailModalProps> = ({
 
   const handleShare = async () => {
     try {
-      const message = `ðŸ”¥ ${user.currentStreak} Day Reading Streak! ðŸ”¥\n\n` +
-        `I've been reading consistently for ${user.currentStreak} days straight on EasyReads!\n\n` +
-        `My longest streak: ${user.longestStreak} days ðŸ“š\n\n` +
-        `Join me in building a reading habit! ðŸ“–`;
-
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { captureRef } = require('react-native-view-shot');
+      const uri = await captureRef(shareCardRef.current, {
+        format: 'png',
+        quality: 1,
+        result: 'tmpfile',
+      });
       await Share.share({
-        message,
+        url: uri,
         title: 'My Reading Streak',
       });
     } catch {
@@ -210,6 +213,15 @@ export const StreakDetailModal: React.FC<StreakDetailModalProps> = ({
                   Earn tokens every 2 days and when leveling up
                 </Text>
               </View>
+            </View>
+
+            <View ref={shareCardRef} collapsable={false} style={styles.shareCard}>
+              <Text style={styles.shareCardBrand}>EasyReads</Text>
+              <Text style={styles.shareCardName}>{user.displayName || 'Reader'}</Text>
+              <StreakFlame size={88} hasLoggedToday={hasLoggedToday} />
+              <Text style={styles.shareCardValue}>{user.currentStreak}</Text>
+              <Text style={styles.shareCardLabel}>Day Reading Streak</Text>
+              <Text style={styles.shareCardMeta}>Best streak: {user.longestStreak} days</Text>
             </View>
 
             {/* Share Button */}
@@ -457,6 +469,56 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.text,
     lineHeight: 19,
+  },
+  shareCard: {
+    backgroundColor: '#1F2937',
+    borderRadius: 24,
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  shareCardBrand: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  shareCardName: {
+    color: COLORS.white,
+    fontSize: 22,
+    fontFamily: FONTS.serif,
+    fontWeight: '700',
+    marginTop: 6,
+    marginBottom: SPACING.md,
+    textAlign: 'center',
+  },
+  shareCardValue: {
+    color: COLORS.white,
+    fontSize: 56,
+    fontFamily: FONTS.serif,
+    fontWeight: '800',
+    marginTop: SPACING.sm,
+    lineHeight: 62,
+  },
+  shareCardLabel: {
+    color: '#FDE68A',
+    fontSize: 14,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  shareCardMeta: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 13,
+    marginTop: SPACING.sm,
   },
   shareButton: {
     flexDirection: 'row',

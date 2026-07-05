@@ -10,6 +10,7 @@ import { getFirebaseDb } from '../../config/firebase';
 import type {
   Book,
   DefinitionResult,
+  BookNote,
   ProgressLog,
   UserProfile,
 } from '../../context/ReadingContext';
@@ -34,6 +35,7 @@ export interface ReadingData {
   books: Book[];
   logs: ProgressLog[];
   vocabNotebook: DefinitionResult[];
+  notes: BookNote[];
   readingMarkers: Record<string, number[]>;
   currentBookId: string;
 }
@@ -70,18 +72,23 @@ function vocabDocId(word: string): string {
   return word.toLowerCase().replace(/\s+/g, '_');
 }
 
+function noteDocId(noteId: string): string {
+  return noteId;
+}
+
 export async function loadReadingData(uid: string): Promise<ReadingData | null> {
   const db = getFirebaseDb();
   if (!db) {
     return null;
   }
 
-  const [userSnap, booksSnap, logsSnap, vocabSnap, metaSnap] =
+  const [userSnap, booksSnap, logsSnap, vocabSnap, notesSnap, metaSnap] =
     await Promise.all([
       getDoc(doc(db, 'users', uid)),
       getDocs(collection(db, 'users', uid, 'books')),
       getDocs(collection(db, 'users', uid, 'logs')),
       getDocs(collection(db, 'users', uid, 'vocab')),
+      getDocs(collection(db, 'users', uid, 'notes')),
       getDoc(doc(db, 'users', uid, 'meta', 'app')),
     ]);
 
@@ -89,7 +96,8 @@ export async function loadReadingData(uid: string): Promise<ReadingData | null> 
     userSnap.exists() ||
     !booksSnap.empty ||
     !logsSnap.empty ||
-    !vocabSnap.empty;
+    !vocabSnap.empty ||
+    !notesSnap.empty;
 
   if (!hasData) {
     return null;
@@ -102,6 +110,7 @@ export async function loadReadingData(uid: string): Promise<ReadingData | null> 
   const books = booksSnap.docs.map(d => d.data() as Book);
   const logs = logsSnap.docs.map(d => d.data() as ProgressLog);
   const vocabNotebook = vocabSnap.docs.map(d => d.data() as DefinitionResult);
+  const notes = notesSnap.docs.map(d => d.data() as BookNote);
   const meta = metaSnap.exists()
     ? (metaSnap.data() as {
         currentBookId?: string;
@@ -114,6 +123,7 @@ export async function loadReadingData(uid: string): Promise<ReadingData | null> 
     books,
     logs,
     vocabNotebook,
+    notes,
     readingMarkers: meta.readingMarkers ?? {},
     currentBookId: meta.currentBookId ?? books[0]?.bookId ?? '',
   };
@@ -131,12 +141,14 @@ export async function saveReadingData(
   let existingBookIds = new Set<string>();
   let existingLogIds = new Set<string>();
   let existingVocabIds = new Set<string>();
+  let existingNoteIds = new Set<string>();
 
   try {
-    const [existingBooks, existingLogs, existingVocab] = await Promise.allSettled([
+    const [existingBooks, existingLogs, existingVocab, existingNotes] = await Promise.allSettled([
       getDocs(collection(db, 'users', uid, 'books')),
       getDocs(collection(db, 'users', uid, 'logs')),
       getDocs(collection(db, 'users', uid, 'vocab')),
+      getDocs(collection(db, 'users', uid, 'notes')),
     ]);
 
     if (existingBooks.status === 'fulfilled') {
@@ -147,6 +159,9 @@ export async function saveReadingData(
     }
     if (existingVocab.status === 'fulfilled') {
       existingVocab.value.docs.forEach(snap => existingVocabIds.add(snap.id));
+    }
+    if (existingNotes.status === 'fulfilled') {
+      existingNotes.value.docs.forEach(snap => existingNoteIds.add(snap.id));
     }
   } catch {
     // failed to read existing docs — proceed with full overwrite
@@ -205,6 +220,21 @@ export async function saveReadingData(
     batch.set(
       doc(db, 'users', uid, 'vocab', vocabDocId(entry.word)),
       stripUndefined(entry),
+    );
+    await trackOp();
+  }
+
+  const noteIds = new Set(data.notes.map(n => noteDocId(n.id)));
+  for (const id of existingNoteIds) {
+    if (!noteIds.has(id)) {
+      batch.delete(doc(db, 'users', uid, 'notes', id));
+      await trackOp();
+    }
+  }
+  for (const note of data.notes) {
+    batch.set(
+      doc(db, 'users', uid, 'notes', noteDocId(note.id)),
+      stripUndefined(note),
     );
     await trackOp();
   }

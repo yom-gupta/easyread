@@ -14,10 +14,16 @@
     },
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/appstore.png"
+      "bundleIdentifier": "com.yomgupta.easyread",
+      "icon": "./assets/appstore.png",
+      "infoPlist": {
+        "NSUserNotificationUsageDescription": "EasyReads sends you a gentle daily reading nudge and a warning before your streak breaks.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.yomgupta.easyread",
+      "versionCode": 2,
       "icon": "./assets/icon.png",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
@@ -25,7 +31,14 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "SCHEDULE_EXACT_ALARM",
+        "USE_EXACT_ALARM",
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -39,6 +52,14 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
+        }
+      ],
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#4A7C59"
         }
       ]
     ]

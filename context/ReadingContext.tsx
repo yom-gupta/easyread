@@ -13,6 +13,7 @@ import { loadReadingData, saveReadingData, onAuthStateChange } from '../services
 import type { User } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { analytics, EVENTS } from '../services/analytics';
 
 // ─────────────────────────────────────────────
 //  DATA INTERFACES
@@ -134,7 +135,6 @@ export interface ReadingContextType {
   updateGoal: (goal: number) => void;
   toggleBookmark: (bookId: string) => void;
   setUser: (user: UserProfile) => void;
-  setAuthUser: (user: User | null) => void;
   syncToFirebase: () => void;
 }
 
@@ -235,9 +235,43 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
   // ── Auth state listener ──────────────────────────────────
   useEffect(() => {
     let unsubscribed = false;
-    let unsubscribeFirebase = () => {};
+    let unsubscribeFirebase = () => { };
 
     const initializeAuthFlow = async () => {
+      try {
+        // Dev-only backdoor. Guarded so release builds cannot activate it.
+        const bypass = __DEV__ ? await AsyncStorage.getItem('dev_bypass_active') : null;
+        if (bypass === 'true') {
+          const mockDevUser = {
+            uid: 'dev-user',
+            displayName: 'Dev Reader',
+            email: 'dev@easyreads.com',
+            emailVerified: true,
+            isAnonymous: false,
+            metadata: {
+              creationTime: new Date().toISOString(),
+              lastSignInTime: new Date().toISOString(),
+            },
+            providerData: [],
+            refreshToken: '',
+            tenantId: null,
+            delete: async () => { },
+            getIdToken: async () => '',
+            getIdTokenResult: async () => ({} as any),
+            reload: async () => { },
+            toJSON: () => ({}),
+          } as unknown as User;
+
+          if (!unsubscribed) {
+            setAuthUser(mockDevUser);
+            setAuthLoading(false);
+            uidRef.current = 'dev-user';
+            loadCloudData('dev-user');
+          }
+          return;
+        }
+      } catch (e) { }
+
       if (unsubscribed) return;
 
       unsubscribeFirebase = onAuthStateChange((firebaseUser) => {
@@ -263,14 +297,46 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
 
     initializeAuthFlow();
 
+    // Hard fallback: never hang on LoadingScreen forever if Firebase is misconfigured.
+    const loadingTimeout = setTimeout(() => {
+      if (!unsubscribed) setAuthLoading(false);
+    }, 5000);
+
     return () => {
       unsubscribed = true;
+      clearTimeout(loadingTimeout);
       unsubscribeFirebase();
     };
   }, []);
 
   const loadCloudData = async (uid: string) => {
     try {
+      // Dev bypass: skip Firebase and create default profile
+      if (uid === 'dev-user') {
+        setUser({
+          uid: 'dev-user',
+          displayName: 'Dev Reader',
+          email: 'dev@easyreads.com',
+          createdAt: new Date().toISOString(),
+          currentStreak: 5,
+          longestStreak: 12,
+          lastReadDate: new Date().toISOString().split('T')[0],
+          streakFreezeAvailable: 1,
+          streakFreezeUsedToday: false,
+          rollingPageAverage: 12,
+          baselineGoal: 15,
+          currentGoal: 15,
+          totalXP: 340,
+          level: 2,
+          achievements: ['7_day_lafanga'],
+          totalPagesRead: 145,
+          totalBooksFinished: 2,
+          vocabSharedCount: 0,
+          consecutiveGoalDays: 4,
+        });
+        return;
+      }
+
       skipSyncRef.current = true;
       const cloudData = await loadReadingData(uid);
 
@@ -285,8 +351,8 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       } else {
         setUser(createEmptyUserProfile(uid));
       }
-    } catch {
-      // Firebase load failed — will sync on next change
+    } catch (error) {
+      console.warn('[EasyRead] Firebase load failed:', error);
     } finally {
       skipSyncRef.current = false;
     }
@@ -294,8 +360,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // ── Firebase: debounced sync on state changes ─────────────
   useEffect(() => {
-    if (!uidRef.current || skipSyncRef.current) return;
-    if (!user.uid) return;
+    if (!uidRef.current || skipSyncRef.current || uidRef.current === 'dev-user') return;
 
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
@@ -310,8 +375,8 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         vocabNotebook,
         readingMarkers,
         currentBookId,
-      }).catch(() => {
-        // Firebase sync failed — will retry on next change
+      }).catch(error => {
+        console.warn('[EasyRead] Firebase sync failed:', error);
       });
     }, 800);
 
@@ -322,7 +387,8 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const syncToFirebase = () => {
     const uid = uidRef.current;
-    if (!uid || !user.uid) return;
+    // Dev bypass: skip Firebase sync
+    if (!uid || uid === 'dev-user') return;
 
     saveReadingData(uid, {
       user,
@@ -331,8 +397,8 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       vocabNotebook,
       readingMarkers,
       currentBookId,
-    }).catch(() => {
-      // Firebase sync failed — will retry on next change
+    }).catch(error => {
+      console.warn('[EasyRead] Firebase sync failed:', error);
     });
   };
 
@@ -359,6 +425,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       };
       setVocabNotebook(prev => [...prev, enhancedWord]);
       addXPInternal('word_added', 1);
+      analytics.logEvent(EVENTS.word_saved, { word: word.word.slice(0, 40) });
     }
   };
 
@@ -369,6 +436,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     setVocabNotebook(prev =>
       prev.filter(item => item.word.toLowerCase() !== word.toLowerCase()),
     );
+    analytics.logEvent(EVENTS.word_removed, { word: word.slice(0, 40) });
   };
 
   const toggleBookmark = (bookId: string) => {
@@ -679,10 +747,10 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
       nextStreak === 7
         ? getXPForAction('streak_7')
         : nextStreak === 14
-        ? getXPForAction('streak_14')
-        : nextStreak === 30
-        ? getXPForAction('streak_30')
-        : 0;
+          ? getXPForAction('streak_14')
+          : nextStreak === 30
+            ? getXPForAction('streak_30')
+            : 0;
 
     const totalXPGain = pageXP + goalBonusXP + bookCompletionXP + streakXP;
     const newTotalXP = user.totalXP + totalXPGain;
@@ -731,11 +799,15 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const lastReadDate = user.lastReadDate;
     const todayDate = new Date(todayStr);
-    const lastDate = new Date(lastReadDate);
+    // Guard: fresh users have lastReadDate === '' → new Date('') is Invalid Date → NaN.
+    // Treat "never read before" as Infinity so downstream streak/achievement checks are safe.
+    const lastDate = lastReadDate ? new Date(lastReadDate) : null;
     const daysSinceLastRead =
-      Math.floor(
-        (todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
-      );
+      lastDate && !isNaN(lastDate.getTime())
+        ? Math.floor(
+            (todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
+          )
+        : Number.POSITIVE_INFINITY;
 
     const weeklyPages = Object.entries(uniqueLogsByDate)
       .filter(([date]) => {
@@ -780,6 +852,21 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     if (newAchievements.length > 0) {
       unlockAchievements(newAchievements, updatedUser, updatedBooks, vocabNotebook, bookId);
     }
+
+    analytics.logEvent(EVENTS.pages_logged, {
+      book_id: bookId,
+      pages_delta: delta,
+      total_today: uniqueLogsByDate[todayStr] || 0,
+    });
+    if (isBookBeingCompleted) {
+      analytics.logEvent(EVENTS.book_completed, { book_id: bookId });
+    }
+    if (triggerAnimation) {
+      analytics.logEvent(
+        triggerAnimation.isBreak ? EVENTS.streak_broken : EVENTS.streak_extended,
+        { streak: triggerAnimation.count },
+      );
+    }
   };
 
   const addBook = (
@@ -803,6 +890,10 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
     };
     setBooks(prev => [newBook, ...prev]);
     setCurrentBookId(id);
+    analytics.logEvent(EVENTS.book_added, {
+      title: title.slice(0, 60),
+      total_pages: totalPages,
+    });
   };
 
   const dismissCelebration = () => setShowFirstBookCelebration(false);
@@ -842,7 +933,6 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
         updateGoal,
         toggleBookmark,
         setUser,
-        setAuthUser,
         syncToFirebase,
       }}
     >
@@ -854,7 +944,7 @@ export const ReadingProvider: React.FC<{ children: React.ReactNode }> = ({
 export const useReading = () => {
   const context = useContext(ReadingContext);
   if (!context) {
-    return null;
+    throw new Error('useReading must be used within a ReadingProvider');
   }
   return context;
 };

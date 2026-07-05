@@ -4,8 +4,8 @@ import {
   Text,
   StyleSheet,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
-import LottieView from 'lottie-react-native';
 import { COLORS, FONTS } from '../constants/theme';
 
 const appLogo = require('../assets/logo.png');
@@ -51,12 +51,7 @@ export const LoadingScreen: React.FC = () => {
         <Text style={styles.appName}>EasyReads</Text>
         <Text style={styles.tagline}>Your mindful reading companion</Text>
         <View style={styles.loadingContainer}>
-          <LottieView
-            source={require('../assets/animations/wellcome.json')}
-            autoPlay
-            loop
-            style={styles.lottieAnimation}
-          />
+          <ActivityIndicator size="large" color={COLORS.accent} />
         </View>
       </Animated.View>
     </View>
@@ -109,10 +104,8 @@ const styles = StyleSheet.create({
     width: 240,
     height: 80,
     marginTop: 16,
-  },
-  lottieAnimation: {
-    width: '100%',
-    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

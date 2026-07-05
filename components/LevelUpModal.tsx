@@ -23,6 +23,7 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ levelInfo, onDismiss
   const scaleAnim = useRef(new Animated.Value(0.6)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const emojiScale = useRef(new Animated.Value(0)).current;
+  const ringSpin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (levelInfo) {
@@ -30,6 +31,16 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ levelInfo, onDismiss
       scaleAnim.setValue(0.6);
       opacityAnim.setValue(0);
       emojiScale.setValue(0);
+      ringSpin.setValue(0);
+
+      const ringLoop = Animated.loop(
+        Animated.timing(ringSpin, {
+          toValue: 1,
+          duration: 2400,
+          useNativeDriver: true,
+        }),
+      );
+      ringLoop.start();
 
       Animated.parallel([
         Animated.spring(scaleAnim, {
@@ -56,7 +67,10 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ levelInfo, onDismiss
 
       // Auto-dismiss after 5s
       const timer = setTimeout(onDismiss, 5000);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        ringLoop.stop();
+      };
     }
   }, [levelInfo]);
 
@@ -95,10 +109,35 @@ export const LevelUpModal: React.FC<LevelUpModalProps> = ({ levelInfo, onDismiss
             <Text style={styles.levelPillText}>LEVEL {levelInfo.level}</Text>
           </View>
 
-          {/* Big emoji */}
-          <Animated.Text style={[styles.emoji, { transform: [{ scale: emojiScale }] }]}>
-            {levelInfo.emoji}
-          </Animated.Text>
+          <View style={styles.emojiStage}>
+            <Animated.View
+              style={[
+                styles.emojiRing,
+                styles.emojiRingOuter,
+                {
+                  borderColor: levelInfo.color,
+                  transform: [
+                    { rotate: ringSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+                  ],
+                },
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.emojiRing,
+                styles.emojiRingInner,
+                {
+                  borderColor: levelInfo.color,
+                  transform: [
+                    { rotate: ringSpin.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] }) },
+                  ],
+                },
+              ]}
+            />
+            <Animated.Text style={[styles.emoji, { transform: [{ scale: emojiScale }] }]}>
+              {levelInfo.emoji}
+            </Animated.Text>
+          </View>
 
           {/* Name */}
           <Text style={[styles.levelName, { color: levelInfo.color }]}>
@@ -167,9 +206,32 @@ const styles = StyleSheet.create({
     color: COLORS.mutedText,
     letterSpacing: 2,
   },
+  emojiStage: {
+    width: 116,
+    height: 116,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: SPACING.sm,
+  },
+  emojiRing: {
+    position: 'absolute',
+    borderWidth: 2,
+    opacity: 0.22,
+  },
+  emojiRingOuter: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    borderStyle: 'dashed',
+  },
+  emojiRingInner: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    borderStyle: 'dotted',
+  },
   emoji: {
     fontSize: 72,
-    marginVertical: SPACING.sm,
   },
   levelName: {
     fontSize: 28,

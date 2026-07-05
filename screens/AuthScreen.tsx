@@ -12,6 +12,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
@@ -70,19 +71,26 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete, onError,
       ]),
     ]).start();
 
-    Animated.loop(
+    const float1Loop = Animated.loop(
       Animated.sequence([
         Animated.timing(float1, { toValue: 1, duration: 3000, useNativeDriver: true }),
         Animated.timing(float1, { toValue: 0, duration: 3000, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    float1Loop.start();
 
-    Animated.loop(
+    const float2Loop = Animated.loop(
       Animated.sequence([
         Animated.timing(float2, { toValue: 1, duration: 4000, useNativeDriver: true }),
         Animated.timing(float2, { toValue: 0, duration: 4000, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    float2Loop.start();
+
+    return () => {
+      float1Loop.stop();
+      float2Loop.stop();
+    };
   }, []);
 
   const showError = (msg: string) => {
@@ -419,9 +427,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthComplete, onError,
         <View style={styles.termsContainer}>
           <Text style={styles.termsText}>
             By continuing, you agree to our{' '}
-            <Text style={styles.termsLink}>Terms of Service</Text>
+            <Text
+              style={styles.termsLink}
+              onPress={() => Linking.openURL('https://easyreads.app/terms')}
+              accessibilityRole="link"
+            >
+              Terms of Service
+            </Text>
             {' '}and{' '}
-            <Text style={styles.termsLink}>Privacy Policy</Text>
+            <Text
+              style={styles.termsLink}
+              onPress={() => Linking.openURL('https://easyreads.app/privacy')}
+              accessibilityRole="link"
+            >
+              Privacy Policy
+            </Text>
           </Text>
         </View>
       </View>

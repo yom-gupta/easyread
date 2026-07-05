@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS } from '../constants/theme';
+import { useAndroidBack } from '../utils/useAndroidBack';
+import { analytics } from '../services/analytics';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { AnalyticsScreen } from '../screens/AnalyticsScreen';
 import { LibraryScreen } from '../screens/LibraryScreen';
@@ -54,6 +56,10 @@ export const MainNavigator: React.FC = () => {
   const indicatorAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    analytics.screen(activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
     const index = TAB_IDS.indexOf(activeTab);
 
     // Slide pages horizontally
@@ -72,6 +78,16 @@ export const MainNavigator: React.FC = () => {
       useNativeDriver: true,
     }).start();
   }, [activeTab, width]);
+
+  // Android back: if not on Home, jump to Home. On Home, allow the OS to
+  // handle it (returns true so the event propagates → the app can background).
+  useAndroidBack(() => {
+    if (activeTab !== 'home') {
+      setActiveTab('home');
+      return; // swallow
+    }
+    return true; // let OS handle
+  }, true);
 
   const handleTabPress = (tabId: TabId) => {
     if (activeTab === tabId) return;
@@ -148,6 +164,9 @@ export const MainNavigator: React.FC = () => {
                 style={styles.navTab}
                 onPress={() => handleTabPress(tab.id)}
                 activeOpacity={1}
+                accessibilityRole="tab"
+                accessibilityLabel={tab.label}
+                accessibilityState={{ selected: isActive }}
               >
                 <Animated.View
                   style={[

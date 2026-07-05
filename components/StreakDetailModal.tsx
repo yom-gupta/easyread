@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { useReading } from '../context/ReadingContext';
+import { StreakFlame } from './StreakFlame';
 
 interface StreakDetailModalProps {
   visible: boolean;
@@ -26,7 +27,11 @@ export const StreakDetailModal: React.FC<StreakDetailModalProps> = ({
   visible,
   onClose,
 }) => {
-  const { user } = useReading();
+  const { user, logs } = useReading();
+  const hasLoggedToday = React.useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return logs.some(l => l.dateString === today);
+  }, [logs]);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -115,7 +120,7 @@ export const StreakDetailModal: React.FC<StreakDetailModalProps> = ({
             {/* Current Streak Hero Card */}
             <View style={styles.heroCard}>
               <View style={styles.flameContainer}>
-                <Ionicons name="flame" size={64} color="#F97316" />
+                <StreakFlame size={96} hasLoggedToday={hasLoggedToday} />
               </View>
               <Text style={styles.streakNumber}>{user.currentStreak}</Text>
               <Text style={styles.streakLabel}>Day Streak</Text>

@@ -9,12 +9,51 @@ import {
   LayoutAnimation,
   Keyboard,
   PanResponder,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS } from '../constants/theme';
 import { useReading, DefinitionResult } from '../context/ReadingContext';
 import * as Speech from 'expo-speech';
 import LottieView from 'lottie-react-native';
+import { LinkedText } from './LinkedText';
+import { fetchEtymology } from '../services/wiktionary';
+import { wordsSavedThisWeek, vocabStreakBadge } from '../utils/vocabStreak';
+import { cefrFromFrequency, CefrLevel, CEFR_HINT } from '../utils/cefrLevel';
+import { GrammarInfoSheet } from './GrammarInfoSheet';
+import { cacheGet, cacheSet } from '../utils/dictCache';
+import { analytics, EVENTS } from '../services/analytics';
+
+// Rarity bucket derived from datamuse Google-frequency score (per-million).
+type Rarity = 'common' | 'uncommon' | 'rare';
+const bucketRarity = (freq: number): Rarity => {
+  if (freq >= 20) return 'common';
+  if (freq >= 1)  return 'uncommon';
+  return 'rare';
+};
+const RARITY_LABEL: Record<Rarity, string> = {
+  common:   'Common',
+  uncommon: 'Uncommon',
+  rare:     'Rare',
+};
+
+// Cross-platform "copy to clipboard" that falls back to Share if
+// expo-clipboard isn't installed.
+const copyToClipboard = async (text: string) => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Clipboard = require('expo-clipboard');
+    await Clipboard.setStringAsync(text);
+    return true;
+  } catch {
+    try {
+      await Share.share({ message: text });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
 
 const ipaToRespelling = (ipa: string): string => {
   if (!ipa) return '';
@@ -82,10 +121,12 @@ interface FullResult {
 interface InlineDictionarySearchProps {
   onOpenNotebook: () => void;
   onFocusChange?: (active: boolean) => void;
+  // Ref-hole so parents can trigger a search from outside (e.g. Word of the Day tap).
+  seedRef?: React.MutableRefObject<((word: string) => void) | null>;
 }
 
-export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ onOpenNotebook, onFocusChange }) => {
-  const { saveWord, removeWord, isWordSaved } = useReading();
+export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ onOpenNotebook, onFocusChange, seedRef }) => {
+  const { saveWord, removeWord, isWordSaved, vocabNotebook } = useReading();
   const [searchWord, setSearchWord] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<FullResult | null>(null);
@@ -95,6 +136,12 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [relatedWords, setRelatedWords] = useState<string[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
+  const [rarity, setRarity] = useState<Rarity | null>(null);
+  const [cefr, setCefr] = useState<CefrLevel | null>(null);
+  const [didYouMean, setDidYouMean] = useState<string[]>([]);
+  const [copiedTick, setCopiedTick] = useState(false);
+  const [etymology, setEtymology] = useState<string>('');
+  const [grammarSheetPos, setGrammarSheetPos] = useState<string | null>(null);
 
   const expandAnim = useRef(new Animated.Value(0)).current;
   const swipeAnim = useRef(new Animated.Value(0)).current;
@@ -131,6 +178,16 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
   useEffect(() => {
     if (onFocusChange) onFocusChange(isFocused || result !== null);
   }, [isFocused, result, onFocusChange]);
+
+  // Expose seed() so parents can trigger a search externally (Word of the Day).
+  useEffect(() => {
+    if (!seedRef) return;
+    seedRef.current = (w: string) => {
+      setSearchWord(w);
+      handleSearch(w);
+    };
+    return () => { if (seedRef) seedRef.current = null; };
+  }, [seedRef]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -207,37 +264,13 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
     }
   }, [result, loading]);
 
-  const speakWord = async (word: string, audioUrl?: string) => {
+  const speakWord = async (word: string) => {
     try {
       const speaking = await Speech.isSpeakingAsync();
       if (speaking) {
         await Speech.stop();
         setIsSpeaking(false);
         return;
-      }
-
-      if (audioUrl) {
-        try {
-          const { NativeModules } = require('react-native');
-          const isAVAvailable = !!(
-            NativeModules.ExponentAV ||
-            NativeModules.ExpoAV ||
-            (NativeModules.NativeModulesProxy && NativeModules.NativeModulesProxy.ExponentAV)
-          );
-
-          if (isAVAvailable) {
-            const { Audio } = require('expo-av');
-            await Audio.setAudioModeAsync({
-              playsInSilentModeIOS: true,
-              allowsRecordingIOS: false,
-            });
-            const { sound } = await Audio.Sound.createAsync({ uri: audioUrl });
-            await sound.playAsync();
-            return;
-          }
-        } catch {
-          // Native AV playback failed, falling back to TTS
-        }
       }
 
       setIsSpeaking(true);
@@ -274,6 +307,46 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
     return { partOfSpeech: 'unknown', definition: defStr };
   };
 
+  const fetchRarity = async (word: string) => {
+    const cached = cacheGet<{ rarity: Rarity; cefr: CefrLevel } | null>('rarity', word);
+    if (cached) { setRarity(cached.rarity); setCefr(cached.cefr); return; }
+    try {
+      const res = await fetch(`https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&md=f&max=1`);
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]?.tags) {
+        const fTag = (data[0].tags as string[]).find(t => t.startsWith('f:'));
+        if (fTag) {
+          const freq = parseFloat(fTag.slice(2));
+          if (!isNaN(freq)) {
+            const r = bucketRarity(freq);
+            const c = cefrFromFrequency(freq);
+            setRarity(r); setCefr(c);
+            cacheSet('rarity', word, { rarity: r, cefr: c });
+          }
+          return;
+        }
+      }
+      setRarity('rare');
+      setCefr('C2');
+      cacheSet('rarity', word, { rarity: 'rare', cefr: 'C2' });
+    } catch {
+      setRarity(null);
+      setCefr(null);
+    }
+  };
+
+  const fetchDidYouMean = async (word: string) => {
+    try {
+      const res = await fetch(`https://api.datamuse.com/sug?s=${encodeURIComponent(word)}&max=5`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setDidYouMean(data.map((d: any) => d.word).filter((w: string) => w && w !== word));
+      }
+    } catch {
+      setDidYouMean([]);
+    }
+  };
+
   const fetchRelatedWords = async (word: string) => {
     setRelatedLoading(true);
     try {
@@ -302,8 +375,25 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
     setResult(null);
     setShowMoreDetails(false);
     setRelatedWords([]);
+    setRarity(null);
+    setCefr(null);
+    setDidYouMean([]);
+    setCopiedTick(false);
+    setEtymology('');
 
     const cleanWord = targetWord.toLowerCase();
+    // Fire rarity + etymology fetches in parallel — non-blocking.
+    fetchRarity(cleanWord);
+    fetchEtymology(cleanWord).then(s => { if (s) setEtymology(s); });
+
+    // Definition cache short-circuit — repeat lookups are instant.
+    const cachedResult = cacheGet<FullResult>('def', cleanWord);
+    if (cachedResult) {
+      setResult(cachedResult);
+      setLoading(false);
+      fetchRelatedWords(cleanWord);
+      return;
+    }
 
     try {
       const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${cleanWord}`);
@@ -331,12 +421,14 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
             })),
           }));
 
-          setResult({
+          const payload: FullResult = {
             word: entry.word,
             phonetic: phoneticText,
             audioUrl: audioUrlStr || undefined,
             meanings,
-          });
+          };
+          setResult(payload);
+          cacheSet('def', cleanWord, payload);
           setLoading(false);
           fetchRelatedWords(cleanWord);
           return;
@@ -368,6 +460,7 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
         // Datamuse fallback failed
       }
 
+      fetchDidYouMean(cleanWord);
       setResult({
         word: searchWord.trim(),
         phonetic: '',
@@ -400,6 +493,7 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
         }
       } catch (fallbackErr) { }
 
+      fetchDidYouMean(cleanWord);
       setResult({
         word: searchWord.trim(),
         phonetic: '',
@@ -422,6 +516,11 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
     setSuggestions([]);
     setRelatedWords([]);
     setShowMoreDetails(false);
+    setRarity(null);
+    setCefr(null);
+    setDidYouMean([]);
+    setCopiedTick(false);
+    setEtymology('');
   };
 
   const swipePanResponder = useRef(
@@ -454,6 +553,31 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
   const firstMeaning = result?.meanings[0];
   const firstDef = firstMeaning?.definitions[0];
   const totalDefs = result?.meanings.reduce((s, m) => s + m.definitions.length, 0) || 0;
+
+  // Weekly vocab-save streak counter shown before the Save button. Shows the
+  // *next* saved-count so tapping Save advances the visible number by one.
+  const savedThisWeek = wordsSavedThisWeek(vocabNotebook);
+  const streakLabel = vocabStreakBadge(savedThisWeek + 1);
+
+  // Share as image if react-native-view-shot is installed, else fall back
+  // to a plain text share. Wraps result in a native share sheet either way.
+  const cardRef = useRef<View>(null);
+  const shareWord = async () => {
+    if (!result) return;
+    const text = `${result.word} — ${firstMeaning?.partOfSpeech || ''}\n${firstDef?.definition || ''}\n\nSaved via EasyReads.`;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const ViewShot = require('react-native-view-shot').captureRef;
+      const uri = await ViewShot(cardRef.current, { format: 'png', quality: 0.9 });
+      await Share.share({ url: uri, message: text }, { dialogTitle: `Share "${result.word}"` });
+      analytics.logEvent(EVENTS.share_word, { word: result.word.slice(0, 40) });
+      return;
+    } catch { /* fall through to text share */ }
+    try {
+      await Share.share({ message: text }, { dialogTitle: `Share "${result.word}"` });
+      analytics.logEvent(EVENTS.share_word, { word: result.word.slice(0, 40) });
+    } catch { /* silent */ }
+  };
 
   const searchBarMarginTop = expandAnim.interpolate({
     inputRange: [0, 1],
@@ -604,7 +728,7 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
           ]}
           {...swipePanResponder.panHandlers}
         >
-          <View style={styles.resultCardInner}>
+          <View style={styles.resultCardInner} ref={cardRef} collapsable={false}>
             <View style={styles.accentBar} />
 
             <Animated.View style={{ opacity: titleOpacity }}>
@@ -624,16 +748,30 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
                         <Ionicons name="sparkles" size={16} color={COLORS.gold} />
                       )}
                     </Animated.View>
-                    <Text style={styles.wordTitle}>{result.word}</Text>
+                    <Text
+                      style={styles.wordTitle}
+                      onLongPress={async () => {
+                        const ok = await copyToClipboard(result.word);
+                        if (ok) {
+                          setCopiedTick(true);
+                          setTimeout(() => setCopiedTick(false), 1200);
+                        }
+                      }}
+                      accessibilityHint="Long press to copy the word"
+                    >
+                      {result.word}
+                    </Text>
                   </View>
                   <View style={styles.phoneticRow}>
-                    {result.phonetic ? (
-                      <Text style={styles.phoneticText}>{result.phonetic}</Text>
-                    ) : null}
-                    {result.phonetic && ipaToRespelling(result.phonetic) ? (
-                      <Text style={styles.respellingText}> [{ipaToRespelling(result.phonetic)}]</Text>
-                    ) : null}
-                    <TouchableOpacity onPress={() => speakWord(result.word, result.audioUrl)} style={styles.audioBtn}>
+                    {(() => {
+                      // Prefer the readable respelling; fall back to raw IPA only if no
+                      // respelling is derivable. This kills the duplicate line.
+                      const respell = result.phonetic ? ipaToRespelling(result.phonetic) : '';
+                      if (respell) return <Text style={styles.respellingText}>[{respell}]</Text>;
+                      if (result.phonetic) return <Text style={styles.phoneticText}>{result.phonetic}</Text>;
+                      return null;
+                    })()}
+                    <TouchableOpacity onPress={() => speakWord(result.word)} style={styles.audioBtn} accessibilityLabel="Speak word">
                       <Ionicons
                         name={isSpeaking ? 'stop-circle' : 'volume-medium'}
                         size={16}
@@ -642,17 +780,65 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
                     </TouchableOpacity>
                   </View>
                 </View>
-                {firstMeaning && (
-                  <View style={styles.posBadge}>
-                    <Text style={styles.posText}>{firstMeaning.partOfSpeech}</Text>
-                  </View>
-                )}
+                <View style={styles.badgeCol}>
+                  {firstMeaning && (
+                    <TouchableOpacity
+                      style={styles.posBadge}
+                      onPress={() => setGrammarSheetPos(firstMeaning.partOfSpeech)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Learn about ${firstMeaning.partOfSpeech}`}
+                    >
+                      <Text style={styles.posText}>{firstMeaning.partOfSpeech}</Text>
+                      <Ionicons name="chevron-forward" size={10} color={COLORS.accent} style={{ marginLeft: 2 }} />
+                    </TouchableOpacity>
+                  )}
+                  {rarity && (() => {
+                    const chipStyle = rarity === 'common' ? styles.rarityChip_common : rarity === 'uncommon' ? styles.rarityChip_uncommon : styles.rarityChip_rare;
+                    const textStyle = rarity === 'common' ? styles.rarityText_common : rarity === 'uncommon' ? styles.rarityText_uncommon : styles.rarityText_rare;
+                    const iconName = rarity === 'common' ? 'people' : rarity === 'uncommon' ? 'sparkles-outline' : 'star';
+                    return (
+                      <View style={[styles.rarityChip, chipStyle]}>
+                        <Ionicons name={iconName as any} size={10} color={textStyle.color as string} />
+                        <Text style={[styles.rarityText, textStyle]}>{RARITY_LABEL[rarity]}</Text>
+                      </View>
+                    );
+                  })()}
+                </View>
               </View>
             </Animated.View>
 
             <Animated.View style={[styles.definitionBody, { opacity: defOpacity }]}>
               {firstDef && (
-                <Text style={styles.definitionText}>{firstDef.definition}</Text>
+                <Text onLongPress={() => speakWord(firstDef.definition)}>
+                  <LinkedText
+                    text={firstDef.definition}
+                    currentWord={result.word}
+                    onWordPress={(w) => { setSearchWord(w); handleSearch(w); }}
+                    style={styles.definitionText}
+                  />
+                </Text>
+              )}
+              {etymology && firstDef?.definition !== 'No definition found for this word.' && (
+                <View style={styles.etymRow}>
+                  <Ionicons name="git-branch-outline" size={12} color={COLORS.mutedText} style={{ marginTop: 2 }} />
+                  <Text style={styles.etymText}>{etymology}</Text>
+                </View>
+              )}
+              {didYouMean.length > 0 && firstDef?.definition === 'No definition found for this word.' && (
+                <View style={styles.didYouMeanBox}>
+                  <Text style={styles.didYouMeanLabel}>Did you mean</Text>
+                  <View style={styles.synChips}>
+                    {didYouMean.slice(0, 5).map((w) => (
+                      <TouchableOpacity
+                        key={w}
+                        style={styles.synChip}
+                        onPress={() => { setSearchWord(w); handleSearch(w); }}
+                      >
+                        <Text style={styles.synChipText}>{w}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
               )}
             </Animated.View>
 
@@ -660,34 +846,25 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
               {firstDef?.example && (
                 <View style={styles.exampleBox}>
                   <Ionicons name="chatbubble-ellipses-outline" size={14} color="#94A3B8" />
-                  <Text style={styles.exampleText}>"{firstDef.example}"</Text>
+                  <Text onLongPress={() => speakWord(firstDef.example || '')} style={{ flex: 1 }}>
+                    <Text style={styles.exampleText}>"</Text>
+                    <LinkedText
+                      text={firstDef.example}
+                      currentWord={result.word}
+                      onWordPress={(w) => { setSearchWord(w); handleSearch(w); }}
+                      style={styles.exampleText}
+                      linkStyle={styles.exampleLink}
+                    />
+                    <Text style={styles.exampleText}>"</Text>
+                  </Text>
                 </View>
               )}
             </Animated.View>
 
             {firstMeaning && firstMeaning.definitions.length > 0 && (
               <>
-                <Animated.View style={{ opacity: synOpacity }}>
-                  {firstMeaning.definitions[0].synonyms.length > 0 && (
-                    <View style={styles.synSection}>
-                      <Text style={styles.synLabel}>Similar</Text>
-                      <View style={styles.synChips}>
-                        {firstMeaning.definitions[0].synonyms.slice(0, 5).map((syn) => (
-                          <TouchableOpacity
-                            key={syn}
-                            style={styles.synChip}
-                            onPress={() => {
-                              setSearchWord(syn);
-                              handleSearch(syn);
-                            }}
-                          >
-                            <Text style={styles.synChipText}>{syn}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                </Animated.View>
+                {/* Similar/Opposite removed — the Smart Related section below covers this. */}
+                <Animated.View style={{ opacity: synOpacity }} />
 
                 {totalDefs > 1 && (
                   <>
@@ -724,9 +901,26 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
                               <Text style={styles.extraDefPos}>{meaning.partOfSpeech}</Text>
                               <Text style={styles.extraDefNum}>{di + 1}</Text>
                             </View>
-                            <Text style={styles.extraDefText}>{def.definition}</Text>
+                            <Text onLongPress={() => speakWord(def.definition)}>
+                              <LinkedText
+                                text={def.definition}
+                                currentWord={result.word}
+                                onWordPress={(w) => { setSearchWord(w); handleSearch(w); }}
+                                style={styles.extraDefText}
+                              />
+                            </Text>
                             {def.example && (
-                              <Text style={styles.extraExample}>"{def.example}"</Text>
+                              <Text onLongPress={() => speakWord(def.example || '')}>
+                                <Text style={styles.extraExample}>"</Text>
+                                <LinkedText
+                                  text={def.example}
+                                  currentWord={result.word}
+                                  onWordPress={(w) => { setSearchWord(w); handleSearch(w); }}
+                                  style={styles.extraExample}
+                                  linkStyle={styles.exampleLink}
+                                />
+                                <Text style={styles.extraExample}>"</Text>
+                              </Text>
                             )}
                             {def.synonyms.length > 0 && (
                               <View style={styles.synChips}>
@@ -778,32 +972,48 @@ export const InlineDictionarySearch: React.FC<InlineDictionarySearchProps> = ({ 
               )}
 
               <View style={styles.resultActions}>
-                <Animated.View style={{ opacity: saveBtnOpacity }}>
+                {streakLabel && !wordAlreadySaved ? (
+                  <View style={styles.vocabStreakPill}>
+                    <Ionicons name="flame" size={11} color={COLORS.gold} />
+                    <Text style={styles.vocabStreakText}>{streakLabel}</Text>
+                  </View>
+                ) : <View />}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <TouchableOpacity
-                    style={[styles.saveBtn, wordAlreadySaved && styles.saveBtnActive]}
-                    onPress={handleSavePress}
-                    disabled={isSaving}
+                    style={styles.shareBtn}
+                    onPress={() => shareWord()}
+                    accessibilityLabel="Share word"
                   >
-                    {wordAlreadySaved ? (
-                      <Ionicons name="bookmark" size={16} color={COLORS.white} />
-                    ) : (
-                      <LottieView
-                        ref={saveLottieRef}
-                        source={require('../assets/animations/save.json')}
-                        loop={false}
-                        style={styles.saveLottie}
-                      />
-                    )}
-                    <Text style={[styles.saveBtnText, wordAlreadySaved && styles.saveBtnTextActive]}>
-                      {wordAlreadySaved ? 'Unsave Word' : 'Save Word'}
-                    </Text>
+                    <Ionicons name="share-outline" size={16} color={COLORS.mutedText} />
                   </TouchableOpacity>
-                </Animated.View>
+                  <Animated.View style={{ opacity: saveBtnOpacity }}>
+                    <TouchableOpacity
+                      style={[styles.saveBtn, wordAlreadySaved && styles.saveBtnActive]}
+                      onPress={handleSavePress}
+                      disabled={isSaving}
+                    >
+                      {wordAlreadySaved ? (
+                        <Ionicons name="bookmark" size={16} color={COLORS.white} />
+                      ) : (
+                        <LottieView
+                          ref={saveLottieRef}
+                          source={require('../assets/animations/save.json')}
+                          loop={false}
+                          style={styles.saveLottie}
+                        />
+                      )}
+                      <Text style={[styles.saveBtnText, wordAlreadySaved && styles.saveBtnTextActive]}>
+                        {wordAlreadySaved ? 'Unsave Word' : 'Save Word'}
+                      </Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                </View>
               </View>
             </Animated.View>
           </View>
         </Animated.View>
       )}
+      <GrammarInfoSheet pos={grammarSheetPos} onClose={() => setGrammarSheetPos(null)} />
     </View>
   );
 };
@@ -972,7 +1182,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(74, 124, 89, 0.08)',
     borderRadius: 14,
   },
+  badgeCol: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
   posBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(74, 124, 89, 0.08)',
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -986,6 +1202,73 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  countChip: {
+    backgroundColor: 'rgba(148, 163, 184, 0.10)',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  countChipText: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  rarityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  rarityChip_common:   { backgroundColor: 'rgba(74, 124, 89, 0.08)', borderColor: 'rgba(74, 124, 89, 0.20)' },
+  rarityChip_uncommon: { backgroundColor: 'rgba(197, 168, 128, 0.12)', borderColor: 'rgba(197, 168, 128, 0.30)' },
+  rarityChip_rare:     { backgroundColor: 'rgba(180, 92, 92, 0.10)', borderColor: 'rgba(180, 92, 92, 0.25)' },
+  rarityText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  rarityText_common:   { color: COLORS.accent },
+  rarityText_uncommon: { color: '#92400E' },
+  rarityText_rare:     { color: '#B45C5C' },
+
+  cefrChip: {
+    backgroundColor: 'rgba(26, 46, 64, 0.06)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(26, 46, 64, 0.15)',
+  },
+  cefrText: {
+    fontSize: 10,
+    color: COLORS.text,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+
+  didYouMeanBox: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(226, 232, 240, 0.8)',
+  },
+  didYouMeanLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  exampleLink: {
+    color: '#6B8F76',
+    fontStyle: 'italic',
+    fontWeight: '600',
   },
 
   definitionBody: {
@@ -1043,6 +1326,20 @@ const styles = StyleSheet.create({
   synChipText: {
     fontSize: 13,
     color: COLORS.accent,
+    fontWeight: '600',
+  },
+  antLabel: { color: '#B45C5C' },
+  antChip: {
+    backgroundColor: 'rgba(180, 92, 92, 0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(180, 92, 92, 0.15)',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  antChipText: {
+    fontSize: 13,
+    color: '#B45C5C',
     fontWeight: '600',
   },
 
@@ -1143,11 +1440,47 @@ const styles = StyleSheet.create({
 
   resultActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: 'rgba(226, 232, 240, 0.8)',
     paddingHorizontal: 24,
     paddingVertical: 14,
+  },
+  vocabStreakPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: 'rgba(197, 168, 128, 0.10)',
+  },
+  vocabStreakText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
+    letterSpacing: 0.2,
+  },
+  shareBtn: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(148, 163, 184, 0.08)',
+  },
+  etymRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    marginTop: 4,
+  },
+  etymText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.mutedText,
+    fontStyle: 'italic',
+    fontFamily: FONTS.regular,
   },
   saveBtn: {
     flexDirection: 'row',

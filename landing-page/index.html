@@ -1537,7 +1537,30 @@ footer {
 <!-- ═══════════════════════════════════════════
      JAVASCRIPT
      ═══════════════════════════════════════════ -->
+<script src="config.js"></script>
 <script>
+// Firebase Analytics (gtag) — only loads when a real measurement ID is configured.
+(function () {
+  const id = window.EASYREAD_ANALYTICS?.measurementId;
+  if (!id || id === 'G-XXXXXXXXXX') return;
+
+  const script = document.createElement('script');
+  script.async = true;
+  script.src = `https://www.googletagmanager.com/gtag/js?id=${id}`;
+  document.head.appendChild(script);
+
+  window.dataLayer = window.dataLayer || [];
+  function gtag() { dataLayer.push(arguments); }
+  window.gtag = gtag;
+  gtag('js', new Date());
+  gtag('config', id, { send_page_view: true });
+
+  window.easyreadLog = (name, params) => {
+    gtag('event', name, params || {});
+  };
+  easyreadLog('landing_view', { page: 'home' });
+})();
+
 // Navbar scroll effect
 const navbar = document.getElementById('navbar');
 window.addEventListener('scroll', () => {
@@ -1583,7 +1606,20 @@ document.querySelectorAll('.faq-question').forEach(btn => {
     const item = btn.parentElement;
     const wasOpen = item.classList.contains('open');
     document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
-    if (!wasOpen) item.classList.add('open');
+    if (!wasOpen) {
+      item.classList.add('open');
+      if (window.easyreadLog) {
+        const q = btn.textContent?.replace('+', '').trim();
+        easyreadLog('faq_open', { question: q });
+      }
+    }
+  });
+});
+
+// Track download button clicks
+document.querySelectorAll('.btn-download, .btn-primary[href="#download"], .nav-cta').forEach(el => {
+  el.addEventListener('click', () => {
+    if (window.easyreadLog) easyreadLog('download_click', { source: el.className });
   });
 });
 

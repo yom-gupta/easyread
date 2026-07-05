@@ -345,4 +345,84 @@ Use the built-in control panel at the bottom of the dashboard screen to verify a
 3.  **Reset Simulation**:
     *   Click **Reset Simulation State** to restore all mock books, user records, and progress history back to their initial values.
 
+---
+
+## Firebase Analytics
+
+EasyReads logs product events to **Firebase Analytics** via a thin wrapper in `services/analytics.ts`. The wrapper picks the right backend automatically:
+
+| Platform | Backend |
+|----------|---------|
+| Android / iOS (dev build or release) | `@react-native-firebase/analytics` |
+| Web | Firebase JS SDK (`firebase/analytics`) |
+| Expo Go / missing native module | Silent no-op |
+
+### App setup
+
+1. In [Firebase Console](https://console.firebase.google.com/) → **Project settings** → your **Web app**, copy the **Measurement ID** (`G-…`).
+2. Add it to `.env`:
+
+```env
+EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX
+```
+
+3. For native Android/iOS builds, place `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) in the project root. They are referenced from `app.json` and are **not** committed to git.
+4. Rebuild the native app after adding `@react-native-firebase/*` — Expo Go will not receive native analytics events.
+
+### Tracked events
+
+Canonical event names live in `EVENTS` inside `services/analytics.ts` (e.g. `auth_signup`, `pages_logged`, `streak_extended`, `word_saved`). Tab and auth-flow screens call `analytics.screen(name)` for `screen_view` events.
+
+### Landing page
+
+The static site in `landing-page/` uses **gtag.js** with the same Measurement ID. Edit `landing-page/config.js`:
+
+```js
+window.EASYREAD_ANALYTICS = { measurementId: 'G-XXXXXXXXXX' };
+```
+
+Events: `landing_view`, `download_click`, `faq_open`.
+
+---
+
+## Building an Android APK
+
+EasyReads uses [EAS Build](https://docs.expo.dev/build/introduction/). The `preview` profile in `eas.json` produces a downloadable **APK** for sideloading.
+
+### Prerequisites
+
+- [Expo account](https://expo.dev/signup) and EAS CLI: `npm install -g eas-cli`
+- Log in: `eas login`
+- Firebase config files in the project root (`google-services.json` for Android)
+- `.env` filled with Firebase keys (EAS secrets or `eas env` for CI builds)
+
+### Build commands
+
+```bash
+# Install dependencies
+npm install
+
+# Internal APK (preview profile — good for testers & landing-page download link)
+eas build --platform android --profile preview
+
+# Production AAB for Google Play (app-bundle, not APK)
+eas build --platform android --profile production
+```
+
+When the build finishes, Expo prints a download URL. Update the **Download APK** link in `landing-page/index.html` (`#download` section) with the new build URL.
+
+### Install on a device
+
+1. Download the APK from the EAS build page.
+2. On Android, enable **Install unknown apps** for your browser or file manager.
+3. Open the APK and install.
+
+### Local development build (optional)
+
+```bash
+npx expo run:android
+```
+
+Requires Android Studio / SDK. Use this for debugging native modules like `@react-native-firebase/analytics` on a physical device or emulator.
+
 

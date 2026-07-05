@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { useReading, Book } from '../context/ReadingContext';
+import { haptics } from '../utils/haptics';
 import { AddBookModal } from '../components/AddBookModal';
 import { BookAnalyticsModal } from '../components/BookAnalyticsModal';
 import { VocabLookupModal } from '../components/VocabLookupModal';
@@ -34,6 +35,7 @@ export const LibraryScreen: React.FC = () => {
     () => new Set(books.map(b => b.bookId)),
   );
   const [filterAnimating, setFilterAnimating] = useState(false);
+  const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleFilterPress = useCallback((filter: LibraryFilter) => {
     if (filter === activeFilter || filterAnimating) return;
@@ -44,18 +46,26 @@ export const LibraryScreen: React.FC = () => {
     setFilterAnimating(true);
     setVisibleBookIds(newIds);
 
-    setTimeout(() => {
+    filterTimerRef.current = setTimeout(() => {
       setActiveFilter(filter);
       setFilterAnimating(false);
+      filterTimerRef.current = null;
     }, 420);
   }, [activeFilter, books, logs, vocabNotebook, filterAnimating]);
+
+  useEffect(() => {
+    // Clear any in-flight filter timer on unmount to avoid setState on unmounted.
+    return () => {
+      if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!filterAnimating) {
       const ids = filterBooks(books, activeFilter, logs, vocabNotebook).map(b => b.bookId);
       setVisibleBookIds(new Set(ids));
     }
-  }, [books.length, activeFilter, filterAnimating]);
+  }, [books, activeFilter, filterAnimating, logs, vocabNotebook]);
 
   const filtered = filterBooks(books, activeFilter, logs, vocabNotebook);
   const readingBooks = filtered.filter(b => b.status === 'reading');
@@ -69,7 +79,7 @@ export const LibraryScreen: React.FC = () => {
     currentBookId: currentBook?.bookId,
     getBadges,
     getLogData,
-    onBookPress: (book: Book) => { setSelectedBook(book); setAnalyticsModalVisible(true); },
+    onBookPress: (book: Book) => { haptics.tapLight(); setSelectedBook(book); setAnalyticsModalVisible(true); },
     filterAnimating,
     visibleBookIds: filterAnimating ? visibleBookIds : undefined,
   };

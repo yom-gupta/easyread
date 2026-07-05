@@ -2,6 +2,7 @@
 import { Modal, StyleSheet, Text, View, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
+import { StreakFlame } from './StreakFlame';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { StreakTrigger } from '../context/ReadingContext';
 
@@ -23,6 +24,8 @@ export const StreakCelebrationModal: React.FC<StreakCelebrationModalProps> = ({
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const countScaleAnim = useRef(new Animated.Value(1)).current;
+  const flamePulseAnim = useRef(new Animated.Value(1)).current;
+  const flameFloatAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (trigger?.visible) {
@@ -33,6 +36,8 @@ export const StreakCelebrationModal: React.FC<StreakCelebrationModalProps> = ({
       opacityAnim.setValue(0);
       shakeAnim.setValue(0);
       countScaleAnim.setValue(1);
+      flamePulseAnim.setValue(1);
+      flameFloatAnim.setValue(0);
 
       // Trigger entrance
       Animated.parallel([
@@ -58,6 +63,39 @@ export const StreakCelebrationModal: React.FC<StreakCelebrationModalProps> = ({
             Animated.timing(shakeAnim, { toValue: 0, duration: 80, useNativeDriver: true }),
           ]).start();
         } else {
+          Animated.loop(
+            Animated.parallel([
+              Animated.sequence([
+                Animated.timing(flamePulseAnim, {
+                  toValue: 1.14,
+                  duration: 650,
+                  easing: Easing.inOut(Easing.quad),
+                  useNativeDriver: true,
+                }),
+                Animated.timing(flamePulseAnim, {
+                  toValue: 1,
+                  duration: 650,
+                  easing: Easing.inOut(Easing.quad),
+                  useNativeDriver: true,
+                }),
+              ]),
+              Animated.sequence([
+                Animated.timing(flameFloatAnim, {
+                  toValue: -7,
+                  duration: 650,
+                  easing: Easing.inOut(Easing.quad),
+                  useNativeDriver: true,
+                }),
+                Animated.timing(flameFloatAnim, {
+                  toValue: 0,
+                  duration: 650,
+                  easing: Easing.inOut(Easing.quad),
+                  useNativeDriver: true,
+                }),
+              ]),
+            ]),
+          ).start();
+
           // Increment the count with a scale-up effect
           setTimeout(() => {
             setDisplayedCount(trigger.count);
@@ -137,9 +175,20 @@ export const StreakCelebrationModal: React.FC<StreakCelebrationModalProps> = ({
           ) : (
             // Streak Success/Increase Display
             <View style={styles.content}>
-              <View style={[styles.iconCircle, { backgroundColor: 'rgba(249, 115, 22, 0.1)', borderColor: '#F97316' }]}>
-                <Ionicons name="flame" size={68} color="#F97316" />
-              </View>
+              <Animated.View
+                style={[
+                  styles.iconCircle,
+                  { backgroundColor: 'rgba(249, 115, 22, 0.1)', borderColor: '#F97316' },
+                  {
+                    transform: [
+                      { scale: flamePulseAnim },
+                      { translateY: flameFloatAnim },
+                    ],
+                  },
+                ]}
+              >
+                <StreakFlame size={72} hasLoggedToday={true} />
+              </Animated.View>
 
               <Animated.View style={{ transform: [{ scale: countScaleAnim }] }}>
                 <Text style={styles.streakNumber}>{displayedCount}</Text>
@@ -200,6 +249,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.md,
+  },
+  flameEmoji: {
+    fontSize: 68,
+    lineHeight: 82,
   },
   streakNumber: {
     fontSize: 54,

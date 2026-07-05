@@ -8,6 +8,7 @@ import {
   Animated,
   Dimensions,
   Image,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,8 @@ import { LevelDetailsModal } from '../components/LevelDetailsModal';
 import { AchievementDetailModal } from '../components/AchievementDetailModal';
 import { StreakDetailModal } from '../components/StreakDetailModal';
 import { signOut } from '../services/firebase/authService';
+import { analytics, EVENTS } from '../services/analytics';
+import { NotificationsScreen } from './NotificationsScreen';
 
 const { width } = Dimensions.get('window');
 const pfp = require('../assets/pfp.png');
@@ -29,13 +32,14 @@ const pfp = require('../assets/pfp.png');
 const FREEZE_TOKEN_MAX = 2;
 
 export const ProfileScreen: React.FC = () => {
-  const { user, books, logs, updateGoal, pendingAchievements, dismissPendingAchievement, setAuthUser } = useReading();
+  const { user, books, logs, updateGoal, pendingAchievements, dismissPendingAchievement } = useReading();
 
   // Modal states
   const [levelModalVisible, setLevelModalVisible] = useState(false);
   const [streakModalVisible, setStreakModalVisible] = useState(false);
   const [achievementModalVisible, setAchievementModalVisible] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState<string | null>(null);
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
 
   const totalPagesRead = user.totalPagesRead || logs.reduce((sum, l) => sum + l.pagesReadDelta, 0);
   const completedBooks = user.totalBooksFinished || books.filter(b => b.status === 'completed').length;
@@ -408,6 +412,24 @@ export const ProfileScreen: React.FC = () => {
           })}
         </View>
 
+        {/* ── Reading Reminders ── */}
+        <TouchableOpacity
+          style={styles.settingsRow}
+          onPress={() => setNotificationsVisible(true)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Reading reminders"
+        >
+          <View style={styles.settingsIcon}>
+            <Ionicons name="notifications-outline" size={20} color={COLORS.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingsTitle}>Reading reminders</Text>
+            <Text style={styles.settingsHint}>Daily nudge in your voice</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.mutedText} />
+        </TouchableOpacity>
+
         {/* ── Motivation Card ── */}
         <View style={styles.motivationCard}>
           <Ionicons name="sparkles" size={16} color={COLORS.gold} />
@@ -420,13 +442,28 @@ export const ProfileScreen: React.FC = () => {
         {/* ── Sign Out Button ── */}
         <TouchableOpacity
           style={styles.signOutButton}
-          onPress={async () => {
-            try {
-              await signOut();
-              setAuthUser(null);
-            } catch {
-              // Sign out error — ignore
-            }
+          onPress={() => {
+            Alert.alert(
+              'Sign out?',
+              'You can sign back in any time — your reading data stays synced.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Sign out',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await signOut();
+                      analytics.logEvent(EVENTS.auth_signout);
+                      analytics.setUserId(null);
+                      // onAuthStateChanged clears context; App.tsx routes to AuthScreen.
+                    } catch {
+                      // Sign out error — silent; user can retry.
+                    }
+                  },
+                },
+              ],
+            );
           }}
           activeOpacity={0.7}
         >
@@ -434,6 +471,13 @@ export const ProfileScreen: React.FC = () => {
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Reading reminders */}
+      {notificationsVisible && (
+        <View style={StyleSheet.absoluteFill}>
+          <NotificationsScreen onClose={() => setNotificationsVisible(false)} />
+        </View>
+      )}
 
       {/* Achievement modal when triggered from profile actions */}
       {pendingAchievements.length > 0 && (
@@ -860,6 +904,35 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#92400E',
   },
+
+  // Settings row (reminders, etc)
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: SPACING.md,
+    marginTop: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  settingsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(74,124,89,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+    fontFamily: FONTS.medium,
+    marginBottom: 2,
+  },
+  settingsHint: { fontSize: 12, color: COLORS.mutedText },
 
   // Motivation
   motivationCard: {

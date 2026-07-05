@@ -13,10 +13,15 @@ import {
   Animated,
   Dimensions,
   PanResponder,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { useReading, DefinitionResult } from '../context/ReadingContext';
+import { WordOfTheDay } from './WordOfTheDay';
+import { haptics } from '../utils/haptics';
+import { useAndroidBack } from '../utils/useAndroidBack';
+import { analytics, EVENTS } from '../services/analytics';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
@@ -28,7 +33,26 @@ interface VocabLookupModalProps {
 type TabType = 'search' | 'notebook';
 
 export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onClose }) => {
-  const { saveWord, isWordSaved, vocabNotebook } = useReading();
+  const { saveWord, removeWord, isWordSaved, vocabNotebook } = useReading();
+
+  const confirmRemove = (w: string) => {
+    haptics.tapLight();
+    Alert.alert(
+      'Remove word?',
+      `"${w}" will be removed from your notebook.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            haptics.warning();
+            removeWord(w);
+          },
+        },
+      ],
+    );
+  };
 
   const activeTab: TabType = 'notebook';
   const [searchWord, setSearchWord] = useState('');
@@ -192,12 +216,15 @@ export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onC
       const shareMsg = `EasyReads Word of the Day:\n\nâœ¨ ${result.word.toUpperCase()} ${result.phonetic || ''}\n(${result.partOfSpeech}) â€” ${result.definition}\n\nJoin me in building a mindful reading habit.`;
       const shareResult = await Share.share({ message: shareMsg, title: `Word Share: ${result.word}` });
       if (shareResult.action === Share.sharedAction) {
+        analytics.logEvent(EVENTS.share_word, { word: result.word.slice(0, 40) });
         setShareFeedback('Card shared successfully!');
       }
     } catch (error) {
       setShareFeedback('Could not trigger share sheet.');
     }
   };
+
+  useAndroidBack(() => { if (visible) handleClose(); }, visible);
 
   const handleClose = () => {
     setSearchWord('');
@@ -247,6 +274,7 @@ export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onC
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollContent}>
+            <WordOfTheDay />
             {vocabNotebook.length === 0 ? (
               <View style={styles.emptyNotebook}>
                 <Ionicons name="bookmark-outline" size={44} color={COLORS.border} />
@@ -264,8 +292,18 @@ export const VocabLookupModal: React.FC<VocabLookupModalProps> = ({ visible, onC
                   <View key={`${entry.word}-${idx}`} style={styles.notebookCard}>
                     <View style={styles.notebookCardHeader}>
                       <Text style={styles.notebookWord}>{entry.word}</Text>
-                      <View style={styles.posBadge}>
-                        <Text style={styles.posText}>{entry.partOfSpeech}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={styles.posBadge}>
+                          <Text style={styles.posText}>{entry.partOfSpeech}</Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => confirmRemove(entry.word)}
+                          hitSlop={10}
+                          style={styles.removeBtn}
+                          accessibilityLabel={`Remove ${entry.word}`}
+                        >
+                          <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
+                        </TouchableOpacity>
                       </View>
                     </View>
                     {entry.phonetic && (
@@ -467,6 +505,10 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 4,
     alignSelf: 'flex-start',
+  },
+  removeBtn: {
+    padding: 4,
+    borderRadius: 6,
   },
   posText: {
     fontSize: 11,

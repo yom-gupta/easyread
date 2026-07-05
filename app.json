@@ -16,6 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.yomgupta.easyread",
       "icon": "./assets/appstore.png",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSUserNotificationUsageDescription": "EasyReads sends you a gentle daily reading nudge and a warning before your streak breaks.",
         "ITSAppUsesNonExemptEncryption": false
@@ -25,6 +26,7 @@
       "package": "com.yomgupta.easyread",
       "versionCode": 2,
       "icon": "./assets/icon.png",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -44,6 +46,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/analytics",
       "expo-web-browser",
       [
         "expo-splash-screen",

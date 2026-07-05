@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   StatusBar,
   Image,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,7 +29,11 @@ import { LevelUpModal } from '../components/LevelUpModal';
 import { AchievementUnlockModal } from '../components/AchievementUnlockModal';
 import { StreakDetailModal } from '../components/StreakDetailModal';
 import { getBookPageMarkers } from '../utils/bookHelpers';
-import { OnboardingChecklist } from '../components/OnboardingChecklist';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+import { StreakFlame } from '../components/StreakFlame';
+import { haptics } from '../utils/haptics';
+import { celebrateBookLogged, scheduleStreakGuard } from '../services/notifications';
+import * as Speech from 'expo-speech';
 
 export const DashboardScreen: React.FC = () => {
   const {
@@ -45,31 +51,95 @@ export const DashboardScreen: React.FC = () => {
     dismissPendingAchievement,
     levelUpInfo,
     dismissLevelUp,
+    logs,
   } = useReading();
+
+  // Streak guard: re-schedule an "at-risk" warning whenever the user's log
+  // state changes. Guard fires at 8pm today only if streak > 0 and they
+  // haven't logged today; auto-cancels when they log.
+  const loggedToday = React.useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return logs.some(l => l.dateString === today);
+  }, [logs]);
+  useEffect(() => {
+    scheduleStreakGuard({
+      currentStreak: user.currentStreak,
+      hasLoggedToday: loggedToday,
+    });
+  }, [user.currentStreak, loggedToday]);
+
+  // TTS warmup — kicks the OS speech engine to initialise so the first real
+  // speakWord() call in the dictionary card has zero cold-start latency.
+  useEffect(() => {
+    Speech.getAvailableVoicesAsync().catch(() => { /* silent */ });
+  }, []);
 
   const [progressModalVisible, setProgressModalVisible] = useState(false);
   const [vocabModalVisible, setVocabModalVisible] = useState(false);
   const [addBookModalVisible, setAddBookModalVisible] = useState(false);
   const [analyticsModalVisible, setAnalyticsModalVisible] = useState(false);
   const [isSearchActive, setIsSearchActive] = useState(false);
+  const searchSeedRef = useRef<((word: string) => void) | null>(null);
   const [switchBookModalVisible, setSwitchBookModalVisible] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [streakModalVisible, setStreakModalVisible] = useState(false);
-  const [checklistDismissed, setChecklistDismissed] = useState(false);
 
   const prevPagesRead = useRef(currentBook?.pagesRead || 0);
+  const streakPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (currentBook) {
-      if (currentBook.pagesRead > prevPagesRead.current) {
-        setShowConfetti(true);
-        // Hide after 3.5 seconds
-        const timer = setTimeout(() => setShowConfetti(false), 3500);
-        return () => clearTimeout(timer);
-      }
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(streakPulse, {
+          toValue: 1.18,
+          duration: 850,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(streakPulse, {
+          toValue: 1,
+          duration: 850,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [streakPulse]);
+
+  // Key the "previous pages" ref by book id so switching books doesn't
+  // spuriously fire confetti the first time we view a new book at a higher page.
+  const prevBookIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentBook) return;
+    if (prevBookIdRef.current !== currentBook.bookId) {
+      prevBookIdRef.current = currentBook.bookId;
       prevPagesRead.current = currentBook.pagesRead;
+      return;
     }
-  }, [currentBook?.pagesRead]);
+    if (currentBook.pagesRead > prevPagesRead.current) {
+      haptics.tapLight();
+      setShowConfetti(true);
+      prevPagesRead.current = currentBook.pagesRead;
+      const timer = setTimeout(() => setShowConfetti(false), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [currentBook?.bookId, currentBook?.pagesRead]);
+
+  // Haptics on streak change. Milestones (7 / 30 / 100 / any multiple of 7)
+  // get the full success buzz; ordinary day-tick gets a medium tap.
+  useEffect(() => {
+    if (!streakTrigger) return;
+    if (streakTrigger.isBreak) {
+      haptics.warning();
+      return;
+    }
+    const n = streakTrigger.count;
+    const isMilestone = n === 7 || n === 30 || n === 100 || (n > 0 && n % 7 === 0);
+    if (isMilestone) haptics.success();
+    else haptics.tapMedium();
+  }, [streakTrigger]);
 
   const progressPercent = currentBook
     ? Math.round((currentBook.pagesRead / currentBook.totalPages) * 100)
@@ -106,20 +176,19 @@ export const DashboardScreen: React.FC = () => {
             <Text style={styles.greetingSub}>Good reading,</Text>
             <Text style={styles.greetingName}>{user.displayName}</Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.streakBadge}
-            onPress={() => setStreakModalVisible(true)}
+            onPress={() => { haptics.tapLight(); setStreakModalVisible(true); }}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`Current streak ${user.currentStreak} days${loggedToday ? '' : ', not logged today'}`}
           >
-            <Ionicons name="flame" size={16} color="#F97316" />
-            <Text style={styles.streakText}>{user.currentStreak}</Text>
+            <Animated.View style={[styles.streakFlameWrap, { transform: [{ scale: streakPulse }] }]}>
+              <StreakFlame size={26} hasLoggedToday={loggedToday} />
+            </Animated.View>
+            <AnimatedNumber value={user.currentStreak} style={styles.streakText} />
           </TouchableOpacity>
         </View>
-
-        {/* Onboarding Checklist */}
-        {!checklistDismissed && user.currentStreak <= 3 && !currentBook && (
-          <OnboardingChecklist onDismiss={() => setChecklistDismissed(true)} />
-        )}
 
         {/* ── Currently Reading Card ── */}
         <View>
@@ -227,6 +296,7 @@ export const DashboardScreen: React.FC = () => {
         <InlineDictionarySearch
           onOpenNotebook={() => setVocabModalVisible(true)}
           onFocusChange={setIsSearchActive}
+          seedRef={searchSeedRef}
         />
 
         {/* Warm Reading Companion filling the empty space */}
@@ -241,7 +311,15 @@ export const DashboardScreen: React.FC = () => {
         visible={progressModalVisible}
         onClose={() => setProgressModalVisible(false)}
         book={currentBook}
-        onUpdate={updateProgress}
+        onUpdate={(...args: any[]) => {
+          const result = (updateProgress as any)(...args);
+          const pages = typeof args[1] === 'number' ? args[1] : 0;
+          if (currentBook && pages > 0) {
+            // Fire a delayed "you did it" system notification — Zomato-style celebration.
+            celebrateBookLogged(currentBook.title, pages);
+          }
+          return result;
+        }}
       />
       <VocabLookupModal
         visible={vocabModalVisible}
@@ -335,6 +413,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: '#F97316',
+  },
+  streakFlame: {
+    fontSize: 17,
+    lineHeight: 20,
+  },
+  streakFlameWrap: {
+    marginRight: 2,
   },
 
   /* Book Card */
